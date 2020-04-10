@@ -1,4 +1,6 @@
 from torch.autograd import Variable
+from . import parse_splits_filename
+from models.vasnet import VASNetModel
 
 class HParameters:
     """Hyperparameters configuration class"""
@@ -20,13 +22,30 @@ class HParameters:
 
         # Project root directory
         self.root = ''
-        self.datasets=['datasets/eccv16_dataset_summe_google_pool5.h5',
-                       'datasets/eccv16_dataset_tvsum_google_pool5.h5',
-                       'datasets/eccv16_dataset_ovp_google_pool5.h5',
-                       'datasets/eccv16_dataset_youtube_google_pool5.h5']
+        self.datasets = ['datasets/eccv16_dataset_summe_google_pool5.h5',
+                        'datasets/eccv16_dataset_tvsum_google_pool5.h5',
+                        'datasets/eccv16_dataset_ovp_google_pool5.h5',
+                        'datasets/eccv16_dataset_youtube_google_pool5.h5']
 
         # Split files to be trained/tested on
-        self.splits = ['splits/tvsum_splits.json', 'splits/summe_splits.json']
+        self.splits_files = ['splits/tvsum_splits.json', 'splits/summe_splits.json']
+
+        # Default model
+        self.model_class = VASNetModel
+
+        # For other dynamic properties
+        self._init()
+
+    def _init(self):
+        # List of splits by filename
+        self.dataset_of_file = {}
+        self.splits_of_file = {}
+        self.metric_of_file = {}
+        for splits_file in self.splits_files:
+            dataset_name, splits = parse_splits_filename(splits_file)
+            self.dataset_of_file[splits_file] = self.get_dataset_by_name(dataset_name).pop()
+            self.splits_of_file[splits_file] = splits
+            self.metric_of_file[splits_file] = dataset_name
 
     def load_from_args(self, args):
         for key in args:
@@ -35,6 +54,7 @@ class HParameters:
                 if hasattr(self, key) and isinstance(getattr(self, key), list):
                     val = val.split()
                 setattr(self, key, val)
+        self._init()
 
     def get_dataset_by_name(self, dataset_name):
         for d in self.datasets:
@@ -44,17 +64,18 @@ class HParameters:
 
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
-        vars = [attr for attr in dir(self) if not callable(getattr(self,attr)) and not (attr.startswith("__") or attr.startswith("_"))]
-
+        vars = ["verbose", "use_cuda", "cuda_device",
+                "l2_req", "lr_epochs", "lr", "epochs_max",
+                "output_dir", "splits_files"]
         info_str = ''
         for i, var in enumerate(vars):
             val = getattr(self, var)
             if isinstance(val, Variable):
                 val = val.data.cpu().numpy().tolist()[0]
-            info_str += '['+str(i)+'] '+var+': '+str(val)+'\n'
+            info_str += "["+str(i)+"] "+var+": "+str(val)
+            info_str += "\n" if i < len(vars)-1 else ""
 
         return info_str
-
 
 if __name__ == "__main__":
     # Check default values

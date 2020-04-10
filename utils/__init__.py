@@ -6,23 +6,15 @@ def parse_splits_filename(splits_filename):
     spath, sfname = os.path.split(splits_filename)
     sfname, _ = os.path.splitext(sfname)
     dataset_name = sfname.split('_')[0]  # Get dataset name e.g. tvsum
-    dataset_type = sfname.split('_')[1]  # augmentation type e.g. aug
-
-    # The keyword 'splits' is used as the filename fields terminator from historical reasons.
-    if dataset_type == 'splits':
-        # Split type is not present
-        dataset_type = ''
 
     # Get number of discrete splits within each split json file
     with open(splits_filename, 'r') as sf:
         splits = json.load(sf)
 
     # dataset_name: summe, tvsum, etc
-    # dataset_type: either '' or 'aug'
     # splits: [{"train_keys": [...], "test_keys": [...]}, ...]
-    # with len(splits) := number of folds
-    return dataset_name, dataset_type, splits
-
+    # with len(splits) := number of k_folds
+    return dataset_name, splits
 
 def lookup_weights_splits_file(path, dataset_name, dataset_type, split_id):
     """Sylvain: Not sure where this function is used, originaly in main.py"""

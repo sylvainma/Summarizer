@@ -1,5 +1,6 @@
 import numpy as np
 import h5py
+import torch
 from vsum_tools import generate_summary, evaluate_summary
 
 class Model:
@@ -11,6 +12,7 @@ class Model:
         self.split = hps.splits_of_file[splits_file][fold]
         self.dataset = h5py.File(hps.dataset_of_file[splits_file], "r")
         self.metric = hps.metric_of_file[splits_file]
+        self.best_weights = None
         self.model = self._init_model()
 
     def _init_model(self):
@@ -48,3 +50,13 @@ class Model:
 
         f_score = np.mean(fms)
         return f_score
+    
+    def save_best_weights(self, weights_path):
+        """Dump current best weights"""
+        if self.best_weights is None:
+            raise Exception("best_weights property is empty, can't save model's weights")
+        torch.save(self.best_weights, weights_path)
+
+    def load_weights(self, weights_path):
+        """Load weights"""
+        self.model.load_state_dict(torch.load(weights_path))

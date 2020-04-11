@@ -1,3 +1,5 @@
+import os
+import datetime
 from torch.autograd import Variable
 from . import parse_splits_filename
 from models.vasnet import VASNetModel
@@ -16,9 +18,10 @@ class HParameters:
 
         self.epochs_max = 300
         self.train_batch_size = 1
+        self.test_every_epochs = 2
 
         # Experiment name, used as output directory
-        self.output_dir = 'ex-10'
+        self.log_path = os.path.join("logs", str(int(datetime.datetime.now().timestamp())))
 
         # Project root directory
         self.root = ''
@@ -28,15 +31,50 @@ class HParameters:
                         'datasets/eccv16_dataset_youtube_google_pool5.h5']
 
         # Split files to be trained/tested on
-        self.splits_files = ['splits/tvsum_splits.json', 'splits/summe_splits.json']
+        self.splits_files = [
+            # 'splits/tvsum_splits.json', 
+            'splits/summe_splits.json'
+        ]
 
         # Default model
         self.model_class = VASNetModel
 
-        # For other dynamic properties
+        # Test mode
+        self.test = False
+        self.weights_of_file = None
+
+    def load_from_args(self, args):
+        # Any key from flags
+        for key in args:
+            val = args[key]
+            if val is not None:
+                if hasattr(self, key) and isinstance(getattr(self, key), list):
+                    val = val.split()
+                setattr(self, key, val)
+        
+        # Pick model
+        if "model" in args:
+            self.model_class = {
+                "baseline": LogisticRegressionModel,
+                "vasnet": VASNetModel
+            }.get(args["model"], LogisticRegressionModel)
+        
+        # Other dynamic properties
         self._init()
 
     def _init(self):
+        # Check if test mode, path for weights is given
+        if self.test:
+            assert self.weights_path is not None, "No weights path given"
+            self.weights_of_file = {}
+            for splits_file in self.splits_files:
+                splits_file_filename = os.path.basename(splits_file)
+                self.weights_of_file[splits_file] = os.path.join(
+                    self.weights_path, splits_file_filename + ".pth")
+        else:
+            # Create log path if does not exist
+            os.makedirs(self.log_path, exist_ok=True)
+
         # List of splits by filename
         self.dataset_of_file = {}
         self.splits_of_file = {}
@@ -46,20 +84,6 @@ class HParameters:
             self.dataset_of_file[splits_file] = self.get_dataset_by_name(dataset_name).pop()
             self.splits_of_file[splits_file] = splits
             self.metric_of_file[splits_file] = dataset_name
-
-    def load_from_args(self, args):
-        for key in args:
-            val = args[key]
-            if val is not None:
-                if hasattr(self, key) and isinstance(getattr(self, key), list):
-                    val = val.split()
-                setattr(self, key, val)
-        if "model" in args:
-            self.model_class = {
-                "baseline": LogisticRegressionModel,
-                "vasnet": VASNetModel
-            }.get(args["model"], LogisticRegressionModel)
-        self._init()
 
     def get_dataset_by_name(self, dataset_name):
         for d in self.datasets:
@@ -71,7 +95,7 @@ class HParameters:
         """Nicely lists hyperparameters when object is printed"""
         vars = ["verbose", "use_cuda", "cuda_device",
                 "l2_req", "lr", "epochs_max",
-                "output_dir", "splits_files"]
+                "log_path", "splits_files"]
         info_str = ''
         for i, var in enumerate(vars):
             val = getattr(self, var)

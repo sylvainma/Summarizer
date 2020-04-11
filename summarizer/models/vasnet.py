@@ -148,6 +148,9 @@ class VASNetModel(Model):
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr, weight_decay=self.hps.l2_req)
 
+        # To record performances of the best epoch 
+        best_f_score = 0.0
+
         # For each epoch
         for epoch in range(self.hps.epochs_max):
 
@@ -181,8 +184,19 @@ class VASNetModel(Model):
                 self.optimizer.step()
                 train_avg_loss.append([float(loss), float(loss_att)])
 
+            # Average training loss value of epoch
             train_avg_loss = np.mean(np.array(train_avg_loss)[:, 0])
             print("   Train loss: {0:.05f}".format(train_avg_loss, end=''))
+
+            # Evaluate performances on test keys
+            if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
+                f_score = self.test()
+                self.model.train()
+                if f_score > best_f_score:
+                    best_f_score = f_score
+                    self.best_weights = self.model.state_dict()
+
+        return best_f_score
 
     def test(self):
         """Test model on test_keys"""

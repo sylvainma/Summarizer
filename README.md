@@ -1,1 +1,1 @@
-# VideoSummarization
+# Summarizer

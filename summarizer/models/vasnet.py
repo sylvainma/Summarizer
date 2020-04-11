@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import Model
+from models import Model
 
 
 class LayerNorm(nn.Module):
@@ -142,9 +142,7 @@ class VASNetModel(Model):
             criterion = criterion.cuda()
 
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())
-        self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr[0], weight_decay=self.hps.l2_req)
-        
-        lr = self.hps.lr[0]
+        self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr, weight_decay=self.hps.l2_req)
 
         # For each epoch
         for epoch in range(self.hps.epochs_max):
@@ -189,7 +187,6 @@ class VASNetModel(Model):
         summary = {}
         with torch.no_grad():
             for i, key in enumerate(test_keys):
-                seq = self.dataset[key]['features'][...]
                 seq = self.dataset[key]['features'][...]
                 seq = torch.from_numpy(seq).unsqueeze(0)
 

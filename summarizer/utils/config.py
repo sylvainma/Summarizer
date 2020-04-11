@@ -1,6 +1,7 @@
 from torch.autograd import Variable
 from . import parse_splits_filename
 from models.vasnet import VASNetModel
+from models.baseline import LogisticRegressionModel
 
 class HParameters:
     """Hyperparameters configuration class"""
@@ -11,8 +12,7 @@ class HParameters:
         self.max_summary_length = 0.15
 
         self.l2_req = 0.00001
-        self.lr_epochs = [0]
-        self.lr = [0.00005]
+        self.lr = 0.00005
 
         self.epochs_max = 300
         self.train_batch_size = 1
@@ -54,6 +54,11 @@ class HParameters:
                 if hasattr(self, key) and isinstance(getattr(self, key), list):
                     val = val.split()
                 setattr(self, key, val)
+        if "model" in args:
+            self.model_class = {
+                "baseline": LogisticRegressionModel,
+                "vasnet": VASNetModel
+            }.get(args["model"], LogisticRegressionModel)
         self._init()
 
     def get_dataset_by_name(self, dataset_name):
@@ -65,7 +70,7 @@ class HParameters:
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
         vars = ["verbose", "use_cuda", "cuda_device",
-                "l2_req", "lr_epochs", "lr", "epochs_max",
+                "l2_req", "lr", "epochs_max",
                 "output_dir", "splits_files"]
         info_str = ''
         for i, var in enumerate(vars):

@@ -6,6 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models import Model
 
+"""
+Summarizing Videos with Attention
+https://arxiv.org/abs/1812.01969
+"""
 
 class LayerNorm(nn.Module):
     def __init__(self, features, eps=1e-6):

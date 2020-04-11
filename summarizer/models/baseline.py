@@ -5,6 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from . import Model
 
+"""
+Logistic Regression as a baseline.
+"""
 
 class LogisticRegression(nn.Module):
     def __init__(self, input_dim=1024):

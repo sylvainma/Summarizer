@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import h5py
 import torch
@@ -27,6 +28,53 @@ class Model:
         """Test model on test_keys"""
         raise Exception("test has not been implemented")
 
+    def predict(self, features):
+        """Predict targets given features as input, should return a numpy"""
+        seq = torch.from_numpy(features).unsqueeze(0)
+        if self.hps.use_cuda:
+            seq, target = seq.float().cuda()
+        y = self.model(seq)
+        y = y[0].detach().cpu().numpy()
+        return y
+
+    def predict_dataset(self, pred_path):
+        """Predict on all videos in the dataset and save in hdfs5 file"""
+        # Load best weights
+        self.model.load_state_dict(self.best_weights)
+        self.model.eval()
+        # Create or open result hdfs5 file
+        with h5py.File(pred_path, "w") as f:
+            dataset_file = os.path.basename(self.hps.dataset_of_file[self.splits_file])
+            g = f.create_group(dataset_file)
+            # Get machine summary for each key
+            for key in self.dataset.keys():
+                # Get video data
+                d = self.dataset[key]
+                features = d["features"][...]
+                cps = d['change_points'][...]
+                num_frames = d['n_frames'][()]
+                nfps = d['n_frame_per_seg'][...].tolist()
+                positions = d['picks'][...]
+                user_summary = d['user_summary'][...]
+                # Predict scores and compute machine summary
+                scores = self.predict(self.dataset[key]["features"][...])
+                machine_summary = generate_summary(scores, cps, num_frames, nfps, positions)
+                # Save in hdfs5 file
+                g = g.create_group(key)
+                g.create_dataset("scores", data=scores)
+                g.create_dataset("user_summary", data=machine_summary)
+                g.create_dataset("machine_summary", data=machine_summary)
+
+    def save_best_weights(self, weights_path):
+        """Dump current best weights"""
+        if self.best_weights is None:
+            raise Exception("best_weights property is empty, can't save model's weights")
+        torch.save(self.best_weights, weights_path)
+
+    def load_weights(self, weights_path):
+        """Load weights"""
+        self.model.load_state_dict(torch.load(weights_path))
+
     def _eval_summary(self, machine_summary_activations, test_keys):
         eval_metric = 'avg' if self.metric == 'tvsum' else 'max'
 
@@ -50,13 +98,3 @@ class Model:
 
         f_score = np.mean(fms)
         return f_score
-    
-    def save_best_weights(self, weights_path):
-        """Dump current best weights"""
-        if self.best_weights is None:
-            raise Exception("best_weights property is empty, can't save model's weights")
-        torch.save(self.best_weights, weights_path)
-
-    def load_weights(self, weights_path):
-        """Load weights"""
-        self.model.load_state_dict(torch.load(weights_path))

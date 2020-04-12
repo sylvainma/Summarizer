@@ -89,7 +89,7 @@ class VASNet(nn.Module):
         self.layer_norm_y = LayerNorm(self.m)
         self.layer_norm_ka = LayerNorm(self.ka.out_features)
 
-    def forward(self, x, seq_len):
+    def forward(self, x):
         m = x.shape[2] # Feature size
 
         # Place the video frames to the batch dimension to allow for batch arithm. operations.
@@ -112,12 +112,11 @@ class VASNet(nn.Module):
         y = self.sig(y)
         y = y.view(1, -1)
 
-        return y, att_weights_
+        return y
 
 
 class VASNetModel(Model):
     def _init_model(self):
-        """Initialize here your model"""
         model = VASNet()
         import torch.nn.init as init
         def weights_init(m):
@@ -137,7 +136,6 @@ class VASNetModel(Model):
         return model
     
     def train(self):
-        """Train model on train_keys"""
         self.model.train()
         train_keys = self.split["train_keys"][:]
 
@@ -173,8 +171,7 @@ class VASNetModel(Model):
                 if self.hps.use_cuda:
                     seq, target = seq.float().cuda(), target.float().cuda()
 
-                seq_len = seq.shape[1]
-                y, _ = self.model(seq,seq_len)
+                y = self.model(seq)
                 loss_att = 0
 
                 loss = criterion(y, target)
@@ -199,7 +196,6 @@ class VASNetModel(Model):
         return best_f_score
 
     def test(self):
-        """Test model on test_keys"""
         self.model.eval()
         test_keys = self.split["test_keys"][:]
         summary = {}
@@ -211,7 +207,7 @@ class VASNetModel(Model):
                 if self.hps.use_cuda:
                     seq = seq.float().cuda()
 
-                y, _ = self.model(seq, seq.shape[1])
+                y = self.model(seq)
                 summary[key] = y[0].detach().cpu().numpy()
 
         f_score = self._eval_summary(summary, test_keys)

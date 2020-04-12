@@ -5,6 +5,7 @@ from . import parse_splits_filename
 from models.vasnet import VASNetModel
 from models.baseline import LogisticRegressionModel
 
+
 class HParameters:
     """Hyperparameters configuration class"""
     def __init__(self):
@@ -20,9 +21,6 @@ class HParameters:
         self.train_batch_size = 1
         self.test_every_epochs = 2
 
-        # Experiment name, used as output directory
-        self.log_path = os.path.join("logs", str(int(datetime.datetime.now().timestamp())))
-
         # Project root directory
         self.root = ''
         self.datasets = ['datasets/eccv16_dataset_summe_google_pool5.h5',
@@ -37,7 +35,7 @@ class HParameters:
         ]
 
         # Default model
-        self.model_class = VASNetModel
+        self.model_class = LogisticRegressionModel
 
         # Test mode
         self.test = False
@@ -63,6 +61,11 @@ class HParameters:
         self._init()
 
     def _init(self):
+        # Experiment name, used as output directory
+        log_dir = str(int(datetime.datetime.now().timestamp()))
+        log_dir += "_" + self.model_class.__name__
+        self.log_path = os.path.join("logs", log_dir)
+
         # Check if test mode, path for weights is given
         if self.test:
             assert self.weights_path is not None, "No weights path given"

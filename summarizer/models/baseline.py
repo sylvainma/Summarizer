@@ -31,7 +31,6 @@ class LogisticRegressionModel(Model):
         return model
     
     def train(self):
-        """Train model on train_keys"""
         self.model.train()
         train_keys = self.split["train_keys"][:]
 
@@ -70,7 +69,6 @@ class LogisticRegressionModel(Model):
                 if self.hps.use_cuda:
                     seq, target = seq.float().cuda(), target.float().cuda()
 
-                seq_len = seq.shape[1]
                 y = self.model(seq)
 
                 loss = criterion(y, target)
@@ -94,7 +92,6 @@ class LogisticRegressionModel(Model):
         return best_f_score
 
     def test(self):
-        """Test model on test_keys"""
         self.model.eval()
         test_keys = self.split["test_keys"][:]
         summary = {}

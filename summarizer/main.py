@@ -34,6 +34,12 @@ def train(hps):
         best_model.save_best_weights(weights_path)
         print("File: {0:}   Best weights: {1:}".format(splits_file, weights_path))
 
+        # Predict on all videos of the dataset using the best model
+        pred_file = f"{os.path.basename(splits_file)}_preds.h5"
+        pred_path = os.path.join(hps.log_path, pred_file)
+        best_model.predict_dataset(pred_path)
+        print("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
+
 
 def test(hps):
     """Evaluation on test keys"""
@@ -61,16 +67,15 @@ def test(hps):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("CS7643 Spring 2020 Project : Video Summarization")
-    parser.add_argument('-r', '--root', type=str, default='', help="Project root directory")
+    parser.add_argument('-v', '--verbose', action='store_true', help="Prints out more messages")
     parser.add_argument('-d', '--datasets', type=str, help="Path to a comma separated list of h5 datasets")
     parser.add_argument('-s', '--splits-files', type=str, help="Comma separated list of split files")
-    parser.add_argument('-o', '--output-dir', type=str, default='data', help="Experiment name")
-    parser.add_argument('-v', '--verbose', action='store_true', help="Prints out more messages")
-    parser.add_argument('-t', '--test', action='store_true', help="Test")
-    parser.add_argument('-e', '--epochs-max', type=int, default=300, help="Number of epochs")
     parser.add_argument('-m', '--model', type=str, help="Model class name")
+    parser.add_argument('-e', '--epochs-max', type=int, default=300, help="Number of epochs for train mode")
     parser.add_argument('-w', '--weights-path', type=str, help="Weights path")
+    parser.add_argument('-t', '--test', action='store_true', help="Test mode")
     args = parser.parse_args()
+    
     hps = HParameters()
     hps.load_from_args(args.__dict__)
     print("Hyperparameters:")

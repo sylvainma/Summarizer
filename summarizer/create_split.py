@@ -18,7 +18,6 @@ import h5py
 import math
 import numpy as np
 import errno
-import shutil
 import json
 
 
@@ -72,7 +71,7 @@ def create():
     print("Split breakdown: # total videos {}. # train videos {}. # test videos {}".format(num_videos, num_train, num_test))
     splits = []
 
-    for split_idx in range(args.num_splits):
+    for _ in range(args.num_splits):
         train_keys, test_keys = split_random(keys, num_videos, num_train)
         splits.append({
             'train_keys': train_keys,

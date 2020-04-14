@@ -1,9 +1,12 @@
+import os
+import sys
 import random
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import Model
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from summarizer.models import Model
 
 """
 Logistic Regression as a baseline.
@@ -29,7 +32,7 @@ class LogisticRegressionModel(Model):
     def _init_model(self):
         model = LogisticRegression()
         return model
-    
+
     def train(self):
         self.model.train()
         train_keys = self.split["train_keys"][:]
@@ -39,12 +42,12 @@ class LogisticRegressionModel(Model):
             criterion = criterion.cuda()
 
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), 
-            lr=self.hps.lr, 
+            self.model.parameters(),
+            lr=self.hps.lr,
             weight_decay=self.hps.l2_req
         )
 
-        # To record performances of the best epoch 
+        # To record performances of the best epoch
         best_f_score = 0.0
 
         # For each epoch
@@ -55,7 +58,7 @@ class LogisticRegressionModel(Model):
             random.shuffle(train_keys)
 
             # For each training video
-            for i, key in enumerate(train_keys):
+            for key in train_keys:
                 dataset = self.dataset[key]
                 seq = dataset['features'][...]
                 seq = torch.from_numpy(seq).unsqueeze(0)
@@ -96,7 +99,7 @@ class LogisticRegressionModel(Model):
         test_keys = self.split["test_keys"][:]
         summary = {}
         with torch.no_grad():
-            for i, key in enumerate(test_keys):
+            for key in test_keys:
                 seq = self.dataset[key]['features'][...]
                 seq = torch.from_numpy(seq).unsqueeze(0)
 

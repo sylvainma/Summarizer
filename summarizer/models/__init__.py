@@ -1,8 +1,10 @@
 import os
+import sys
 import numpy as np
 import h5py
 import torch
-from vsum_tools import generate_summary, evaluate_summary
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from summarizer.vsum_tools import generate_summary, evaluate_summary
 
 class Model:
     """Abstract class handling the training process"""
@@ -21,7 +23,7 @@ class Model:
     def _init_model(self):
         """Initialize here your model"""
         raise Exception("_init_model has not been implemented")
-    
+
     def train(self):
         """Train model on train_keys"""
         raise Exception("train has not been implemented")
@@ -59,12 +61,12 @@ class Model:
                 positions = d['picks'][...]
                 user_summary = d['user_summary'][...]
                 # Predict scores and compute machine summary
-                scores = self.predict(self.dataset[key]["features"][...])
+                scores = self.predict(features)
                 machine_summary = generate_summary(scores, cps, num_frames, nfps, positions)
                 # Save in hdfs5 file
                 g = g.create_group(key)
                 g.create_dataset("scores", data=scores)
-                g.create_dataset("user_summary", data=machine_summary)
+                g.create_dataset("user_summary", data=user_summary)
                 g.create_dataset("machine_summary", data=machine_summary)
 
     def save_best_weights(self, weights_path):

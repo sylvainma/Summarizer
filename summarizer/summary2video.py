@@ -1,9 +1,7 @@
+import os.path as osp
+import argparse
 import h5py
 import cv2
-import os
-import os.path as osp
-import numpy as np
-import argparse
 from tqdm import tqdm
 
 def frm2video(frm_dir, summary, vid_writer):
@@ -31,7 +29,7 @@ if __name__ == '__main__':
     summary_path = osp.join(osp.dirname(args.path), summary_file)
     vid_writer = cv2.VideoWriter(
         summary_path,
-        cv2.VideoWriter_fourcc(*"MP4V"),
+        cv2.VideoWriter_fourcc(*"mp4v"),
         args.fps,
         (args.width, args.height)
     )
@@ -41,3 +39,4 @@ if __name__ == '__main__':
     h5_preds.close()
     frm2video(args.frames, summary, vid_writer)
     vid_writer.release()
+    print(f"Summary saved {summary_path}")

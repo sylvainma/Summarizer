@@ -1,6 +1,8 @@
 import os
 import argparse
-from utils.config import HParameters
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from summarizer.utils.config import HParameters
 
 
 def train(hps):
@@ -76,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument('-w', '--weights-path', type=str, help="Weights path")
     parser.add_argument('-t', '--test', action='store_true', help="Test mode")
     args = parser.parse_args()
-    
+ 
     hps = HParameters()
     hps.load_from_args(args.__dict__)
     print("Hyperparameters:")

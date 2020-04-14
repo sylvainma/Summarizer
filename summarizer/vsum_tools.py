@@ -14,10 +14,13 @@ Modifications by Jiri Fajtl
 - added evaluate_user_summaries() for user summaries ground truth evaluation
 '''
 
+import os
+import sys
+import math
 import numpy as np
 #from knapsack import knapsack_dp
-from knapsack import knapsack_ortools
-import math
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from summarizer.knapsack import knapsack_ortools
 
 
 def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, method='knapsack'):
@@ -47,7 +50,7 @@ def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, met
 
     seg_score = []
     for seg_idx in range(n_segs):
-        start, end = int(cps[seg_idx,0]), int(cps[seg_idx,1]+1)
+        start, end = int(cps[seg_idx, 0]), int(cps[seg_idx, 1]+1)
         scores = frame_scores[start:end]
         seg_score.append(float(scores.mean()))
 
@@ -91,7 +94,7 @@ def evaluate_summary(machine_summary, user_summary, eval_metric='avg'):
     """
     machine_summary = machine_summary.astype(np.float32)
     user_summary = user_summary.astype(np.float32)
-    n_users,n_frames = user_summary.shape
+    n_users, n_frames = user_summary.shape
 
     # binarization
     machine_summary[machine_summary > 0] = 1
@@ -108,7 +111,7 @@ def evaluate_summary(machine_summary, user_summary, eval_metric='avg'):
     rec_arr = []
 
     for user_idx in range(n_users):
-        gt_summary = user_summary[user_idx,:]
+        gt_summary = user_summary[user_idx, :]
         overlap_duration = (machine_summary * gt_summary).sum()
         precision = overlap_duration / (machine_summary.sum() + 1e-8)
         recall = overlap_duration / (gt_summary.sum() + 1e-8)
@@ -129,7 +132,7 @@ def evaluate_summary(machine_summary, user_summary, eval_metric='avg'):
         max_idx = np.argmax(f_scores)
         final_prec = prec_arr[max_idx]
         final_rec = rec_arr[max_idx]
-    
+
     return final_f_score, final_prec, final_rec
 
 
@@ -143,7 +146,7 @@ def evaluate_user_summaries(user_summary, eval_metric='avg'):
     'max' takes the maximum (best) out of multiple comparisons.
     """
     user_summary = user_summary.astype(np.float32)
-    n_users, n_frames = user_summary.shape
+    n_users, _ = user_summary.shape
 
     # binarization
     user_summary[user_summary > 0] = 1

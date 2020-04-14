@@ -15,6 +15,8 @@ class Model:
         self.metric = hps.metric_of_file[splits_file]
         self.best_weights = None
         self.model = self._init_model()
+        if self.hps.use_cuda:
+            self.model.cuda()
 
     def _init_model(self):
         """Initialize here your model"""
@@ -32,7 +34,7 @@ class Model:
         """Predict targets given features as input, should return a numpy"""
         seq = torch.from_numpy(features).unsqueeze(0)
         if self.hps.use_cuda:
-            seq, target = seq.float().cuda()
+            seq = seq.float().cuda()
         y = self.model(seq)
         y = y[0].detach().cpu().numpy()
         return y

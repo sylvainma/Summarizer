@@ -68,6 +68,7 @@ def test(hps):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("CS7643 Spring 2020 Project : Video Summarization")
     parser.add_argument('-v', '--verbose', action='store_true', help="Prints out more messages")
+    parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
     parser.add_argument('-d', '--datasets', type=str, help="Path to a comma separated list of h5 datasets")
     parser.add_argument('-s', '--splits-files', type=str, help="Comma separated list of split files")
     parser.add_argument('-m', '--model', type=str, help="Model class name")

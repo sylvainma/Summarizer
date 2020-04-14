@@ -61,12 +61,12 @@ class Model:
                 positions = d['picks'][...]
                 user_summary = d['user_summary'][...]
                 # Predict scores and compute machine summary
-                scores = self.predict(self.dataset[key]["features"][...])
+                scores = self.predict(features)
                 machine_summary = generate_summary(scores, cps, num_frames, nfps, positions)
                 # Save in hdfs5 file
                 g = g.create_group(key)
                 g.create_dataset("scores", data=scores)
-                g.create_dataset("user_summary", data=machine_summary)
+                g.create_dataset("user_summary", data=user_summary)
                 g.create_dataset("machine_summary", data=machine_summary)
 
     def save_best_weights(self, weights_path):

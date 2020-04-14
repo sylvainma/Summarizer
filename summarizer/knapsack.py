@@ -10,10 +10,10 @@ def knapsack(W, wt, val, n):
     # Build table K[][] in bottom up manner
     for i in range(n+1):
         for w in range(W+1):
-            if i==0 or w==0:
+            if i == 0 or w == 0:
                 K[i][w] = 0
             elif wt[i-1] <= w:
-                K[i][w] = max(val[i-1] + K[i-1][w-wt[i-1]],  K[i-1][w])
+                K[i][w] = max(val[i-1] + K[i-1][w-wt[i-1]], K[i-1][w])
             else:
                 K[i][w] = K[i-1][w]
 
@@ -33,24 +33,25 @@ def knapsack(W, wt, val, n):
     # a = A(j + 1, Y + 1);
 
     while a > 0:
-       while K[j][Y] == a:
-           j = j - 1
+        while K[j][Y] == a:
+            j = j - 1
 
-       j = j + 1
-       amount[j-1] = 1
-       Y = Y - wt[j-1]
-       j = j - 1
-       a = K[j][Y]
+        j = j + 1
+        amount[j-1] = 1
+        Y = Y - wt[j-1]
+        j = j - 1
+        a = K[j][Y]
 
     return amount
 
 
 def test_knapsack():
-    weights = [1 ,1 ,1, 1 ,2 ,2 ,3]
-    values  = [1 ,1 ,2 ,3, 1, 3 ,5]
+    weights = [1, 1, 1, 1, 2, 2, 3]
+    values = [1, 1, 2, 3, 1, 3, 5]
     best = 13
-    print(knapsack(7, weights, values, 7))
-
+    solution = knapsack(7, weights, values, 7)
+    print(solution)
+    assert np.array(values)[solution == 1].sum() == best
 #===========================================
 '''
 ------------------------------------------------
@@ -74,27 +75,27 @@ Return:
   2. max_val: maximum value (optional)
 ------------------------------------------------
 '''
-def knapsack_dp(values,weights,n_items,capacity,return_all=False):
-    check_inputs(values,weights,n_items,capacity)
+def knapsack_dp(values, weights, n_items, capacity, return_all=False):
+    check_inputs(values, weights, n_items, capacity)
 
-    table = np.zeros((n_items+1,capacity+1),dtype=np.float32)
-    keep = np.zeros((n_items+1,capacity+1),dtype=np.float32)
+    table = np.zeros((n_items+1, capacity+1), dtype=np.float32)
+    keep = np.zeros((n_items+1, capacity+1), dtype=np.float32)
 
-    for i in range(1,n_items+1):
-        for w in range(0,capacity+1):
+    for i in range(1, n_items+1):
+        for w in range(0, capacity+1):
             wi = weights[i-1] # weight of current item
             vi = values[i-1] # value of current item
-            if (wi <= w) and (vi + table[i-1,w-wi] > table[i-1,w]):
-                table[i,w] = vi + table[i-1,w-wi]
-                keep[i,w] = 1
+            if (wi <= w) and (vi + table[i-1, w-wi] > table[i-1, w]):
+                table[i, w] = vi + table[i-1, w-wi]
+                keep[i, w] = 1
             else:
-                table[i,w] = table[i-1,w]
+                table[i, w] = table[i-1, w]
 
     picks = []
     K = capacity
 
-    for i in range(n_items,0,-1):
-        if keep[i,K] == 1:
+    for i in range(n_items, 0, -1):
+        if keep[i, K] == 1:
             picks.append(i)
             K -= weights[i-1]
 
@@ -102,31 +103,31 @@ def knapsack_dp(values,weights,n_items,capacity,return_all=False):
     picks = [x-1 for x in picks] # change to 0-index
 
     if return_all:
-        max_val = table[n_items,capacity]
-        return picks,max_val
+        max_val = table[n_items, capacity]
+        return picks, max_val
     return picks
 
-def check_inputs(values,weights,n_items,capacity):
+def check_inputs(values, weights, n_items, capacity):
     # check variable type
-    assert(isinstance(values,list))
-    assert(isinstance(weights,list))
-    assert(isinstance(n_items,int))
-    assert(isinstance(capacity,int))
+    assert isinstance(values, list)
+    assert isinstance(weights, list)
+    assert isinstance(n_items, int)
+    assert isinstance(capacity, int)
     # check value type
-    assert(all(isinstance(val,int) or isinstance(val,float) for val in values))
-    assert(all(isinstance(val,int) for val in weights))
+    assert all(isinstance(val, int) or isinstance(val, float) for val in values)
+    assert all(isinstance(val, int) for val in weights)
     # check validity of value
-    assert(all(val >= 0 for val in weights))
-    assert(n_items > 0)
-    assert(capacity > 0)
+    assert all(val >= 0 for val in weights)
+    assert n_items > 0
+    assert capacity > 0
 
 def test_knapsack_dp():
-    values = [2,3,4]
-    weights = [1,2,3]
+    values = [2, 3, 4]
+    weights = [1, 2, 3]
     n_items = 3
     capacity = 3
-    picks = knapsack_dp(values,weights,n_items,capacity)
-    print (picks)
+    picks = knapsack_dp(values, weights, n_items, capacity)
+    print(picks)
 
 
 
@@ -135,7 +136,7 @@ osolver = pywrapknapsack_solver.KnapsackSolver(
     pywrapknapsack_solver.KnapsackSolver.KNAPSACK_DYNAMIC_PROGRAMMING_SOLVER,
     'test')
 
-def knapsack_ortools(values, weights, items, capacity ):
+def knapsack_ortools(values, weights, items, capacity):
     scale = 1000
     values = np.array(values)
     weights = np.array(weights)
@@ -144,7 +145,7 @@ def knapsack_ortools(values, weights, items, capacity ):
     capacity = capacity
 
     osolver.Init(values.tolist(), [weights.tolist()], [capacity])
-    computed_value = osolver.Solve()
+    osolver.Solve()
     packed_items = [x for x in range(0, len(weights))
                     if osolver.BestSolutionContains(x)]
 

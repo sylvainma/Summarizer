@@ -1,9 +1,7 @@
+import os.path as osp
+import argparse
 import h5py
 import cv2
-import os
-import os.path as osp
-import numpy as np
-import argparse
 from tqdm import tqdm
 
 def frm2video(frm_dir, summary, vid_writer):

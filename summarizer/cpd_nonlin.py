@@ -15,11 +15,12 @@ def calc_scatters(K):
 
     diagK2 = np.diag(K2)
 
-    i = np.arange(n).reshape((-1,1))
-    j = np.arange(n).reshape((1,-1))
-    scatters = (K1[1:].reshape((1,-1))-K1[:-1].reshape((-1,1))
-                - (diagK2[1:].reshape((1,-1)) + diagK2[:-1].reshape((-1,1)) - K2[1:,:-1].T - K2[:-1,1:]) / ((j-i+1).astype(float) + (j==i-1).astype(float)))
-    scatters[j<i]=0
+    i = np.arange(n).reshape((-1, 1))
+    j = np.arange(n).reshape((1, -1))
+    scatters = (K1[1:].reshape((1, -1))-K1[:-1].reshape((-1, 1))
+                - (diagK2[1:].reshape((1, -1)) + diagK2[:-1].reshape((-1, 1)) - K2[1:, :-1].T - K2[:-1, 1:])
+                / ((j-i+1).astype(float) + (j == i-1).astype(float)))
+    scatters[j < i] = 0
     #code = r"""
     #for (int i = 0; i < n; i++) {
     #    for (int j = i; j < n; j++) {
@@ -32,8 +33,7 @@ def calc_scatters(K):
 
     return scatters
 
-def cpd_nonlin(K, ncp, lmin=1, lmax=100000, backtrack=True, verbose=True,
-    out_scatters=None):
+def cpd_nonlin(K, ncp, lmin=1, lmax=100000, backtrack=True, verbose=True, out_scatters=None):
     """ Change point detection with dynamic programming
     K - square kernel matrix
     ncp - number of change points to detect (ncp >= 0)
@@ -49,22 +49,22 @@ def cpd_nonlin(K, ncp, lmin=1, lmax=100000, backtrack=True, verbose=True,
     m = int(ncp)  # prevent numpy.int64
 
     (n, n1) = K.shape
-    assert(n == n1), "Kernel matrix awaited."
+    assert n == n1, "Kernel matrix awaited."
 
-    assert(n >= (m + 1)*lmin)
-    assert(n <= (m + 1)*lmax)
-    assert(lmax >= lmin >= 1)
+    assert n >= (m + 1)*lmin
+    assert n <= (m + 1)*lmax
+    assert lmax >= lmin >= 1
 
     if verbose:
         #print "n =", n
-        print ("Precomputing scatters...")
+        print("Precomputing scatters...")
     J = calc_scatters(K)
 
-    if out_scatters != None:
+    if out_scatters is not None:
         out_scatters[0] = J
 
     if verbose:
-        print ("Inferring best change points...")
+        print("Inferring best change points...")
     # I[k, l] - value of the objective for k change-points and l first frames
     I = 1e101*np.ones((m+1, n+1))
     I[0, lmin:lmax] = J[0, lmin-1:lmax-1]
@@ -73,16 +73,16 @@ def cpd_nonlin(K, ncp, lmin=1, lmax=100000, backtrack=True, verbose=True,
         # p[k, l] --- "previous change" --- best t[k] when t[k+1] equals l
         p = np.zeros((m+1, n+1), dtype=int)
     else:
-        p = np.zeros((1,1), dtype=int)
+        p = np.zeros((1, 1), dtype=int)
 
-    for k in range(1,m+1):
+    for k in range(1, m+1):
         for l in range((k+1)*lmin, n+1):
             tmin = max(k*lmin, l-lmax)
             tmax = l-lmin+1
-            c = J[tmin:tmax,l-1].reshape(-1) + I[k-1, tmin:tmax].reshape(-1)
-            I[k,l] = np.min(c)
+            c = J[tmin:tmax, l-1].reshape(-1) + I[k-1, tmin:tmax].reshape(-1)
+            I[k, l] = np.min(c)
             if backtrack:
-                p[k,l] = np.argmin(c)+tmin
+                p[k, l] = np.argmin(c)+tmin
 
     #code = r"""
     ##define max(x,y) ((x)>(y)?(x):(y))

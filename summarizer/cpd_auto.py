@@ -1,5 +1,8 @@
+import os
+import sys
 import numpy as np
-from cpd_nonlin import cpd_nonlin
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from summarizer.cpd_nonlin import cpd_nonlin
 
 def cpd_auto(K, ncp, vmax, desc_rate=1, **kwargs):
     """Main interface
@@ -70,7 +73,7 @@ def eval_score(K, cps):
         K_sub = K[cps[i]:cps[i+1], :][:, cps[i]:cps[i+1]]
         V1 += np.sum(np.diag(K_sub))
         V2 += np.sum(K_sub) / float(cps[i+1] - cps[i])
-    return (V1 - V2)
+    return V1 - V2
 
 
 def eval_cost(K, cps, score, vmax):

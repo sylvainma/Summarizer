@@ -1,10 +1,14 @@
+import os
+import sys
 import random
 import h5py
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models import Model
+import torch.nn.init as init
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from summarizer.models import Model
 
 """
 Summarizing Videos with Attention
@@ -49,7 +53,7 @@ class SelfAttention(nn.Module):
         V = self.V(x)
 
         Q *= 0.06
-        logits = torch.matmul(Q, K.transpose(1,0))
+        logits = torch.matmul(Q, K.transpose(1, 0))
 
         if self.ignore_itself:
             # Zero the diagonal activations (a distance of each frame with itself)
@@ -63,7 +67,7 @@ class SelfAttention(nn.Module):
 
         att_weights_ = nn.functional.softmax(logits, dim=-1)
         weights = self.drop50(att_weights_)
-        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
+        y = torch.matmul(V.transpose(1, 0), weights).transpose(1, 0)
         y = self.output_linear(y)
 
         return y, att_weights_
@@ -118,7 +122,6 @@ class VASNet(nn.Module):
 class VASNetModel(Model):
     def _init_model(self):
         model = VASNet()
-        import torch.nn.init as init
         def weights_init(m):
             classname = m.__class__.__name__
             if classname == 'Linear':
@@ -128,13 +131,13 @@ class VASNetModel(Model):
         model.apply(weights_init)
         cuda_device = self.hps.cuda_device
         if self.hps.use_cuda:
-            print("Setting CUDA device: ",cuda_device)
+            print("Setting CUDA device: ", cuda_device)
             torch.cuda.set_device(cuda_device)
             #torch.cuda.manual_seed(seed) #TODO: Consider uncommenting if implementing a seed selection at some point
         if self.hps.use_cuda:
             model.cuda()
         return model
-    
+
     def train(self):
         self.model.train()
         train_keys = self.split["train_keys"][:]
@@ -146,7 +149,7 @@ class VASNetModel(Model):
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr, weight_decay=self.hps.l2_req)
 
-        # To record performances of the best epoch 
+        # To record performances of the best epoch
         best_f_score = 0.0
 
         # For each epoch
@@ -157,7 +160,7 @@ class VASNetModel(Model):
             random.shuffle(train_keys)
 
             # For each training video
-            for i, key in enumerate(train_keys):
+            for key in train_keys:
                 dataset = self.dataset[key]
                 seq = dataset['features'][...]
                 seq = torch.from_numpy(seq).unsqueeze(0)
@@ -200,7 +203,7 @@ class VASNetModel(Model):
         test_keys = self.split["test_keys"][:]
         summary = {}
         with torch.no_grad():
-            for i, key in enumerate(test_keys):
+            for key in test_keys:
                 seq = self.dataset[key]['features'][...]
                 seq = torch.from_numpy(seq).unsqueeze(0)
 

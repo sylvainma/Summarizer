@@ -1,10 +1,12 @@
 import os
+import sys
 import datetime
 import torch
 from torch.autograd import Variable
-from . import parse_splits_filename
-from models.vasnet import VASNetModel
-from models.baseline import LogisticRegressionModel
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from summarizer.utils import parse_splits_filename
+from summarizer.models.vasnet import VASNetModel
+from summarizer.models.baseline import LogisticRegressionModel
 
 
 class HParameters:
@@ -31,7 +33,7 @@ class HParameters:
 
         # Split files to be trained/tested on
         self.splits_files = [
-            # 'splits/tvsum_splits.json', 
+            # 'splits/tvsum_splits.json',
             'splits/summe_splits.json'
         ]
 
@@ -40,6 +42,7 @@ class HParameters:
 
         # Test mode
         self.test = False
+        self.weights_path = None
         self.weights_of_file = None
 
     def load_from_args(self, args):
@@ -50,14 +53,14 @@ class HParameters:
                 if hasattr(self, key) and isinstance(getattr(self, key), list):
                     val = val.split()
                 setattr(self, key, val)
-        
+
         # Pick model
         if "model" in args:
             self.model_class = {
                 "baseline": LogisticRegressionModel,
                 "vasnet": VASNetModel
             }.get(args["model"], LogisticRegressionModel)
-        
+
         # Other dynamic properties
         self._init()
 

@@ -1,5 +1,6 @@
 import os
 import datetime
+import torch
 from torch.autograd import Variable
 from . import parse_splits_filename
 from models.vasnet import VASNetModel
@@ -65,6 +66,14 @@ class HParameters:
         log_dir = str(int(datetime.datetime.now().timestamp()))
         log_dir += "_" + self.model_class.__name__
         self.log_path = os.path.join("logs", log_dir)
+
+        # Handle use_cuda flag
+        if self.use_cuda == "default":
+            self.use_cuda = torch.cuda.is_available()
+        elif self.use_cuda == "yes":
+            self.use_cuda = True
+        else:
+            self.use_cuda = False
 
         # Check if test mode, path for weights is given
         if self.test:

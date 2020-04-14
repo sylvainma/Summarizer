@@ -130,7 +130,7 @@ class VASNetModel(Model):
         if self.hps.use_cuda:
             print("Setting CUDA device: ",cuda_device)
             torch.cuda.set_device(cuda_device)
-            torch.cuda.manual_seed(rnd_seed)
+            #torch.cuda.manual_seed(seed) #TODO: Consider uncommenting if implementing a seed selection at some point
         if self.hps.use_cuda:
             model.cuda()
         return model

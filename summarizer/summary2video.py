@@ -29,7 +29,7 @@ if __name__ == '__main__':
     summary_path = osp.join(osp.dirname(args.path), summary_file)
     vid_writer = cv2.VideoWriter(
         summary_path,
-        cv2.VideoWriter_fourcc(*"MP4V"),
+        cv2.VideoWriter_fourcc(*"mp4v"),
         args.fps,
         (args.width, args.height)
     )

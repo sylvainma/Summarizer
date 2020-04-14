@@ -39,3 +39,4 @@ if __name__ == '__main__':
     h5_preds.close()
     frm2video(args.frames, summary, vid_writer)
     vid_writer.release()
+    print(f"Summary saved {summary_path}")

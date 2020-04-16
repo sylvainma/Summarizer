@@ -45,6 +45,9 @@ class HParameters:
         self.weights_path = None
         self.weights_of_file = None
 
+        # Dict containing extra parameters, possibly model-specific
+        self.extra_params = None
+
     def load_from_args(self, args):
         # Any key from flags
         for key in args:
@@ -110,7 +113,7 @@ class HParameters:
         """Nicely lists hyperparameters when object is printed"""
         vars = ["verbose", "use_cuda", "cuda_device",
                 "l2_req", "lr", "epochs_max",
-                "log_path", "splits_files"]
+                "log_path", "splits_files", "extra_params"]
         info_str = ''
         for i, var in enumerate(vars):
             val = getattr(self, var)

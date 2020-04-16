@@ -77,10 +77,14 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--epochs-max', type=int, default=300, help="Number of epochs for train mode")
     parser.add_argument('-w', '--weights-path', type=str, help="Weights path")
     parser.add_argument('-t', '--test', action='store_true', help="Test mode")
-    args = parser.parse_args()
- 
+    args, unknown_args = parser.parse_known_args()
+
+    hps_init = args.__dict__
+    extra_params = {unknown_args[i].lstrip('-'): u.lstrip('-') if u[0] != '-' else True for i, u in enumerate(unknown_args[1:] + ['-']) if unknown_args[i][0] == '-'}
+    hps_init["extra_params"] = extra_params
+
     hps = HParameters()
-    hps.load_from_args(args.__dict__)
+    hps.load_from_args(hps_init)
     print("Hyperparameters:")
     print("----------------------------------------------------------------------")
     print(hps)

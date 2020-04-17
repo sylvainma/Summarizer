@@ -16,7 +16,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from summarizer.models import Model
 #from __future__ import print_function
 
-from tabulate import tabulate
 import vsum_tools
 
 """

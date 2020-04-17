@@ -80,7 +80,7 @@ if __name__ == "__main__":
     args, unknown_args = parser.parse_known_args()
 
     hps_init = args.__dict__
-    extra_params = {unknown_args[i].lstrip('-'): u.lstrip('-') if u[0] != '-' else True for i, u in enumerate(unknown_args[1:] + ['-']) if unknown_args[i][0] == '-'}
+    extra_params = {unknown_args[i].lstrip('-'): u.lstrip('-') if u[0] != '-' else True for i, u in enumerate(unknown_args[1:] + ['-']) if unknown_args[i][0] == '-'} if len(unknown_args) > 0 else {}
     hps_init["extra_params"] = extra_params
 
     hps = HParameters()

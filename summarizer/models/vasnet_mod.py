@@ -15,7 +15,7 @@ https://arxiv.org/abs/1812.01969
 """
 
 class VASNetMod(nn.Module):
-    def __init__(self, feature_dim = 1024, ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
+    def __init__(self, feature_dim=1024, max_length=None, ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
         super(VASNetMod, self).__init__()
 
         # feature dimension that is the the dimensionality of the key, query and value vectors
@@ -32,6 +32,11 @@ class VASNetMod(nn.Module):
         # scaling factor to have more stable gradients. VasNet recommends 0.06,
         # but self-attention defaults to 1/square root of the dimension of the key vectors.
         self.scale = scale if scale is not None else 1 / np.sqrt(self.feature_dim)
+
+        # Optional positional embeddings
+        self.max_length = max_length
+        if self.max_length:
+            self.pos_embed = torch.nn.Embedding(self.max_length, self.feature_dim)
 
         # Common steps
         self.dropout = nn.Dropout(0.5)
@@ -76,9 +81,13 @@ class VASNetMod(nn.Module):
     def forward(self, x):
         batch_size, seq_len, feature_dim = x.shape
 
-        assert self.feature_dim == feature_dim
-
         negative_inf = float('-inf')
+
+        assert self.feature_dim == feature_dim
+        if self.max_length is not None:
+            assert self.max_length >= seq_len
+            pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
+            x += self.pos_embed(pos_tensor)
 
         K = self.K(x)
         Q = self.Q(x)
@@ -120,6 +129,7 @@ class VASNetMod(nn.Module):
 class VASNetModelMod(Model):
     def _init_model(self):
         model = VASNetMod(
+            max_length=int(self.hps.extra_params["pos_embed"]) if "pos_embed" in self.hps.extra_params else None,
             ignore_self=self.hps.extra_params["ignore_self"] if "ignore_self" in self.hps.extra_params else False,
             attention_aperture=int(self.hps.extra_params["local"]) if "local" in self.hps.extra_params else None,
             epsilon=float(self.hps.extra_params["epsilon"]) if "epsilon" in self.hps.extra_params else 1e-6, 

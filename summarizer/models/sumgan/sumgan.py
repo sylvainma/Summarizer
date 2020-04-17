@@ -160,6 +160,52 @@ class Summarizer(nn.Module):
         x_hat, (h_mu, h_logvar) = self.vae(x_weighted)
         return x_hat, (h_mu, h_logvar), scores
 
+class cLSTM(nn.Module):
+    def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
+        """Discriminator as a classifier LSTM"""
+        super(cLSTM, self).__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            bidirectional=True
+        )
+        self.out = nn.Sequential(
+            nn.Linear(hidden_size, 1),
+            nn.Sigmoid())
+
+    def forward(self, x):
+        """
+        Input 
+          x: (seq_len, batch_size, input_size)
+        Output
+          probs: (batch_size, 1)
+        """
+        _, (h_last, _) = self.lstm(x) # (num_layers*2, batch_size, hidden_size)
+        h_last_top = h_last[-1]       # (batch_size, hidden_size)
+        probs = self.out(h_last_top)  # (batch_size, 1)
+        return probs
+
+class Discriminator(nn.Module):
+    def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
+        """Discriminator"""
+        super(Discriminator, self).__init__()
+        self.c_lstm = cLSTM(
+          input_size=input_size,
+          hidden_size=hidden_size,
+          num_layers=num_layers)
+
+    def forward(self, x):
+        """
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          probs: (batch_size, 1)
+        """
+        probs = self.c_lstm(x)
+        return probs
+
+
 class SumGANModel(Model):
     def _init_model(self):
         model = Summarizer()
@@ -258,4 +304,11 @@ if __name__ == "__main__":
     assert x.shape[0] == x_hat.shape[0]
     assert x.shape[1] == x_hat.shape[1]
     assert x.shape[2] == x_hat.shape[2]
+
+    model = Discriminator().cuda()
+    x = torch.randn(10, 3, 1024).cuda()
+    probs = model(x)
+    print(x.shape, probs.shape)
+    assert x.shape[1] == probs.shape[0]
+    assert probs.shape[1] == 1
 

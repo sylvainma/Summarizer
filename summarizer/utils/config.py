@@ -8,6 +8,7 @@ from summarizer.utils import parse_splits_filename
 from summarizer.models.vasnet import VASNetModel
 from summarizer.models.DSN import DSNModel
 from summarizer.models.baseline import LogisticRegressionModel
+from summarizer.models.sumgan import SumGANModel
 
 
 class HParameters:
@@ -66,6 +67,7 @@ class HParameters:
                 "baseline": LogisticRegressionModel,
                 "vasnet": VASNetModel,
                 "DSN": DSNModel,
+                "sumgan": SumGANModel
             }.get(args["model"], LogisticRegressionModel)
 
         # Other dynamic properties

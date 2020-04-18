@@ -5,12 +5,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
 
 """
 Unsupervised Video Summarization with Adversarial LSTM Networks
 http://web.engr.oregonstate.edu/~sinisa/research/publications/cvpr17_summarization.pdf
+https://github.com/j-min/Adversarial_Video_Summary
 """
 
 class sLSTM(nn.Module):
@@ -97,7 +98,7 @@ class dLSTM(nn.Module):
           x_hat: (1, batch_size, input_size)
         """
         batch_size, hidden_size = h_0.size(1), h_0.size(2)
-        x = torch.zeros(1, batch_size, hidden_size).cuda() # TODO: deal with cuda()
+        x = torch.zeros(1, batch_size, hidden_size).to(h_0.device)
         h, c = h_0, c_0
         x_hat = []
         for i in range(seq_len):
@@ -232,14 +233,9 @@ class SumGANModel(Model):
         """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))]"""
         return -torch.mean(torch.log(probs_real) + torch.log(1 - probs_fake))
 
-    def train(self):
+    def train(self, fold):
         self.model.train()
-        train_keys = self.split["train_keys"][:]
-
-        # Should be handled in Model.__init__()
-        # TODO: delete if that's the case
-        # if self.hps.use_cuda:
-        #     self.model.cuda()
+        train_keys, _ = self._get_train_test_keys(fold)
 
         self.s_e_optimizer = torch.optim.Adam(
             list(self.summarizer.s_lstm.parameters())
@@ -270,7 +266,7 @@ class SumGANModel(Model):
             random.shuffle(train_keys)
 
             # For each training video
-            for key in train_keys:
+            for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
                 x = dataset['features'][...]
                 x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
@@ -299,11 +295,11 @@ class SumGANModel(Model):
                 loss_s_e = loss_recons + loss_prior + loss_sparsity
 
                 # Update
-                self.s_e_optimizer.zero_grad()
                 loss_s_e.backward()
                 # TODO: gradient clip
                 # https://github.com/j-min/Adversarial_Video_Summary/blob/master/solver.py#L144
                 self.s_e_optimizer.step()
+                self.s_e_optimizer.zero_grad()
 
                 ###############################
                 # Decoder update
@@ -319,10 +315,10 @@ class SumGANModel(Model):
                 loss_d = loss_recons + loss_gan
 
                 # Update
-                self.d_optimizer.zero_grad()
                 loss_d.backward()
                 # TODO: gradient clip
                 self.d_optimizer.step()
+                self.d_optimizer.zero_grad()
 
                 ###############################
                 # Discriminator update
@@ -336,10 +332,10 @@ class SumGANModel(Model):
                 loss_c = self.loss_gan_discriminator(probs_real, probs_fake)
 
                 # Update
-                self.c_optimizer.zero_grad()
                 loss_c.backward()
                 # TODO: gradient clip
                 self.c_optimizer.step()
+                self.c_optimizer.zero_grad()
 
                 ###############################
                 # Record losses
@@ -350,21 +346,24 @@ class SumGANModel(Model):
             # Average probs for real and fake data
             print("   D(x): {0:.05f}   D(x_hat): {0:.05f}".format(
               np.mean(train_avg_D_x), np.mean(train_avg_D_x_hat),
-            end=''))
+            end='')) 
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
-                f_score = self.test()
+                f_score = self.test(fold)
                 self.model.train()
                 if f_score > best_f_score:
                     best_f_score = f_score
                     self.best_weights = self.model.state_dict()
 
+            # Free unused memory from GPU
+            torch.cuda.empty_cache()
+
         return best_f_score
 
-    def test(self):
+    def test(self, fold):
         self.model.eval()
-        test_keys = self.split["test_keys"][:]
+        _, test_keys = self._get_train_test_keys(fold)
         summary = {}
         with torch.no_grad():
             for key in test_keys:
@@ -382,8 +381,11 @@ class SumGANModel(Model):
 
 
 if __name__ == "__main__":
-    model = Summarizer().cuda()
-    x = torch.randn(10, 3, 1024).cuda()
+    model = nn.ModuleList([Summarizer(), GAN()])
+    print("Parameters:", sum([_.numel() for _ in model.parameters()]))
+
+    model = Summarizer()
+    x = torch.randn(10, 3, 1024)
     x_hat, (mu, logvar), scores = model(x)
     print(x.shape, x_hat.shape, mu.shape, logvar.shape, scores.shape)
     assert x.shape[0] == scores.shape[0]
@@ -395,8 +397,8 @@ if __name__ == "__main__":
     assert x.shape[1] == x_hat.shape[1]
     assert x.shape[2] == x_hat.shape[2]
 
-    model = GAN().cuda()
-    x = torch.randn(10, 3, 1024).cuda()
+    model = GAN()
+    x = torch.randn(10, 3, 1024)
     probs, h = model(x)
     print(x.shape, probs.shape)
     assert x.shape[1] == probs.shape[0]

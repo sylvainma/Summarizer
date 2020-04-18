@@ -1,1 +1,0 @@
-from .sumgan import SumGANModel

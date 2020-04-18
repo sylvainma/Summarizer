@@ -211,9 +211,28 @@ class GAN(nn.Module):
 
 class SumGANModel(Model):
     def _init_model(self):
-        self.summarizer = Summarizer()
-        self.gan = GAN()
+        # SumGAN hyperparameters
+        self.clip = float(self.hps.extra_params.get("clip", 5.0))
+        self.sigma = float(self.hps.extra_params.get("sigma", 0.3))
+        self.input_size = int(self.hps.extra_params.get("input_size", 1024))
+        self.sLSTM_hidden_size = int(self.hps.extra_params.get("sLSTM_hidden_size", 1024))
+        self.sLSTM_num_layers = int(self.hps.extra_params.get("sLSTM_num_layers", 2))
+        self.edLSTM_hidden_size = int(self.hps.extra_params.get("edLSTM_hidden_size", 2048))
+        self.edLSTM_num_layers = int(self.hps.extra_params.get("edLSTM_num_layers", 2))
+        self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
+        self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
+
+        # Model
+        self.summarizer = Summarizer(
+            input_size=self.input_size,
+            sLSTM_hidden_size=self.sLSTM_hidden_size, sLSTM_num_layers=self.sLSTM_num_layers,
+            edLSTM_hidden_size=self.edLSTM_hidden_size, edLSTM_num_layers=self.edLSTM_num_layers)
+        self.gan = GAN(
+            input_size=self.input_size, 
+            hidden_size=self.cLSTM_hidden_size, num_layers=self.cLSTM_num_layers)
         model = nn.ModuleList([self.summarizer, self.gan])
+        
+        print("SumGAN parameters:", sum([_.numel() for _ in model.parameters()]))
         return model
 
     def loss_recons(self, h_real, h_fake):

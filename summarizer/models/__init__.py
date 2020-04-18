@@ -8,23 +8,31 @@ from summarizer.vsum_tools import generate_summary, evaluate_summary
 
 class Model:
     """Abstract class handling the training process"""
-    def __init__(self, hps, splits_file, fold):
+    def __init__(self, hps, splits_file):
         self.hps = hps
         self.splits_file = splits_file
-        self.fold = fold
-        self.split = hps.splits_of_file[splits_file][fold]
         self.dataset = h5py.File(hps.dataset_of_file[splits_file], "r")
         self.metric = hps.metric_of_file[splits_file]
-        self.best_weights = None
+        
+    def reset(self):
+        """Reset between two folds of the cross-validation"""
         self.model = self._init_model()
+        torch.cuda.empty_cache()
         if self.hps.use_cuda:
             self.model.cuda()
+        return self
+
+    def _get_train_test_keys(self, fold):
+        """Train/Test keys from current split file and fold"""
+        self.fold = fold
+        self.split = self.hps.splits_of_file[self.splits_file][fold]
+        return self.split["train_keys"][:], self.split["test_keys"][:]
 
     def _init_model(self):
         """Initialize here your model"""
         raise Exception("_init_model has not been implemented")
 
-    def train(self):
+    def train(self, fold):
         """Train model on train_keys"""
         raise Exception("train has not been implemented")
 

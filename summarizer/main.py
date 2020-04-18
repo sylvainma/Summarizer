@@ -12,34 +12,35 @@ def train(hps):
         print("Start training on {}".format(splits_file))
         n_folds = len(hps.splits_of_file[splits_file])
         fscore_cv = 0.0
+        
+        # Destination for weights and predictions on dataset
+        weights_path = hps.weights_path[splits_file]
+        pred_path = hps.pred_path[splits_file]
 
         # For every fold in current split file
-        models = []
+        fscore_max = 0.0
+        model = hps.model_class(hps, splits_file)
         for fold in range(n_folds):
-            model = hps.model_class(hps, splits_file, fold)
-            best_fscore = model.train()
-            fscore_cv += best_fscore
-            models.append((fold, model, best_fscore))
+            fold_best_fscore = model.reset().train(fold)
+            fscore_cv += fold_best_fscore
+            
+            # Save weights if it is the current maximum F-score
+            if fold_best_fscore > fscore_max:
+                fscore_max = fold_best_fscore
+                model.save_best_weights(weights_path)
 
             # Report F-score of current fold
-            print("File: {}   Split: {}/{}   Best F-score: {:0.5f}".format(
-                splits_file, fold+1, n_folds, best_fscore))
+            print("File: {}   Fold: {}/{}   Fold best F-score: {:0.5f}".format(
+                splits_file, fold+1, n_folds, fold_best_fscore))
 
-        # Report cross-validation F-score of current split file
+        # Report cross-validation F-score of current split file and location of best weights
         fscore_cv /= n_folds
         print("File: {0:}   Cross-validation F-score: {1:0.5f}".format(splits_file, fscore_cv))
-
-        # Dump weights of the best model among folds
-        best_model = max(models, key=lambda m: m[2])[1]
-        weights_file = f"{os.path.basename(splits_file)}.pth"
-        weights_path = os.path.join(hps.log_path, weights_file)
-        best_model.save_best_weights(weights_path)
         print("File: {0:}   Best weights: {1:}".format(splits_file, weights_path))
 
-        # Predict on all videos of the dataset using the best model
-        pred_file = f"{os.path.basename(splits_file)}_preds.h5"
-        pred_path = os.path.join(hps.log_path, pred_file)
-        best_model.predict_dataset(pred_path)
+        # Predict on all videos of the dataset using the best weights
+        model.reset().load_weights(weights_path)
+        model.predict_dataset(pred_path)
         print("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
 
 
@@ -59,7 +60,7 @@ def test(hps):
             fscore_avg += fscore
 
             # Report F-score of current fold
-            print("File: {}   Split: {}/{}   F-score: {:0.5f}".format(
+            print("File: {}   Fold: {}/{}   F-score: {:0.5f}".format(
                 splits_file, fold+1, n_folds, fscore))
 
         # Report cross-validation F-score of current split file

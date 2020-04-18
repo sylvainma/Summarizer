@@ -87,6 +87,25 @@ class HParameters:
         else:
             self.use_cuda = False
 
+        # List of splits by filename
+        self.dataset_of_file = {}
+        self.splits_of_file = {}
+        self.metric_of_file = {}
+        for splits_file in self.splits_files:
+            dataset_name, splits = parse_splits_filename(splits_file)
+            self.dataset_of_file[splits_file] = self.get_dataset_by_name(dataset_name).pop()
+            self.splits_of_file[splits_file] = splits
+            self.metric_of_file[splits_file] = dataset_name
+
+        # Destination for weights and predictions on dataset
+        self.weights_path = {}
+        self.pred_path = {}
+        for splits_file in self.splits_files:
+            weights_file = f"{os.path.basename(splits_file)}.pth"
+            self.weights_path[splits_file] = os.path.join(self.log_path, weights_file)
+            pred_file = f"{os.path.basename(splits_file)}_preds.h5"
+            self.pred_path[splits_file] = os.path.join(self.log_path, pred_file)
+
         # Check if test mode, path for weights is given
         if self.test:
             assert self.weights_path is not None, "No weights path given"
@@ -98,16 +117,6 @@ class HParameters:
         else:
             # Create log path if does not exist
             os.makedirs(self.log_path, exist_ok=True)
-
-        # List of splits by filename
-        self.dataset_of_file = {}
-        self.splits_of_file = {}
-        self.metric_of_file = {}
-        for splits_file in self.splits_files:
-            dataset_name, splits = parse_splits_filename(splits_file)
-            self.dataset_of_file[splits_file] = self.get_dataset_by_name(dataset_name).pop()
-            self.splits_of_file[splits_file] = splits
-            self.metric_of_file[splits_file] = dataset_name
 
     def get_dataset_by_name(self, dataset_name):
         for d in self.datasets:

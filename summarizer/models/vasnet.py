@@ -161,9 +161,9 @@ class VASNetModel(Model):
             model.cuda()
         return model
 
-    def train(self):
+    def train(self, fold):
         self.model.train()
-        train_keys = self.split["train_keys"][:]
+        train_keys, _ = self._get_train_test_keys(fold)
 
         criterion = nn.MSELoss()
         if self.hps.use_cuda:
@@ -211,7 +211,7 @@ class VASNetModel(Model):
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
-                f_score = self.test()
+                f_score = self.test(fold)
                 self.model.train()
                 if f_score > best_f_score:
                     best_f_score = f_score
@@ -219,9 +219,9 @@ class VASNetModel(Model):
 
         return best_f_score
 
-    def test(self):
+    def test(self, fold):
         self.model.eval()
-        test_keys = self.split["test_keys"][:]
+        _, test_keys = self._get_train_test_keys(fold)
         summary = {}
         with torch.no_grad():
             for key in test_keys:

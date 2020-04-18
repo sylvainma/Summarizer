@@ -97,7 +97,7 @@ class dLSTM(nn.Module):
           x_hat: (1, batch_size, input_size)
         """
         batch_size, hidden_size = h_0.size(1), h_0.size(2)
-        x = torch.zeros(1, batch_size, hidden_size).cuda()
+        x = torch.zeros(1, batch_size, hidden_size).cuda() # TODO: deal with cuda()
         h, c = h_0, c_0
         x_hat = []
         for i in range(seq_len):
@@ -180,16 +180,17 @@ class cLSTM(nn.Module):
           x: (seq_len, batch_size, input_size)
         Output
           probs: (batch_size, 1)
+          h_last_top: (batch_size, hidden_size)
         """
         _, (h_last, _) = self.lstm(x) # (num_layers*2, batch_size, hidden_size)
         h_last_top = h_last[-1]       # (batch_size, hidden_size)
         probs = self.out(h_last_top)  # (batch_size, 1)
-        return probs
+        return probs, h_last_top
 
-class Discriminator(nn.Module):
+class GAN(nn.Module):
     def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
-        """Discriminator"""
-        super(Discriminator, self).__init__()
+        """GAN: discriminator"""
+        super(GAN, self).__init__()
         self.c_lstm = cLSTM(
           input_size=input_size,
           hidden_size=hidden_size,
@@ -201,29 +202,61 @@ class Discriminator(nn.Module):
           x: (seq_len, batch_size, input_size)
         Output
           probs: (batch_size, 1)
+          h_last_top: (batch_size, hidden_size)
         """
-        probs = self.c_lstm(x)
-        return probs
+        probs, h_last_top = self.c_lstm(x)
+        return probs, h_last_top
 
 
 class SumGANModel(Model):
     def _init_model(self):
-        model = Summarizer()
+        self.summarizer = Summarizer()
+        self.gan = GAN()
+        model = nn.ModuleList([self.summarizer, self.gan])
         return model
+
+    def loss_recons(self, h_real, h_fake):
+        return torch.norm(h_real - h_fake, p=2)
+
+    def loss_prior(self, mu, logvar):
+        return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+    def loss_sparsity(self, scores, sigma):
+        return torch.abs(torch.mean(scores) - sigma)
+
+    def loss_gan_generator(self, probs_fake):
+        """maximize E[log(cLSTM(x_hat))]"""
+        return -torch.mean(torch.log(probs_fake))
+
+    def loss_gan_discriminator(self, probs_real, probs_fake):
+        """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))]"""
+        return -torch.mean(torch.log(probs_real) + torch.log(1 - probs_fake))
 
     def train(self):
         self.model.train()
         train_keys = self.split["train_keys"][:]
 
-        criterion = nn.MSELoss()
-        if self.hps.use_cuda:
-            criterion = criterion.cuda()
+        # Should be handled in Model.__init__()
+        # TODO: delete if that's the case
+        # if self.hps.use_cuda:
+        #     self.model.cuda()
 
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(),
+        self.s_e_optimizer = torch.optim.Adam(
+            list(self.summarizer.s_lstm.parameters())
+            + list(self.summarizer.vae.e_lstm.parameters()),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req
-        )
+            weight_decay=self.hps.l2_req)
+        self.d_optimizer = torch.optim.Adam(
+            self.summarizer.vae.d_lstm.parameters(),
+            lr=self.hps.lr,
+            weight_decay=self.hps.l2_req)
+        self.c_optimizer = torch.optim.Adam(
+            self.gan.c_lstm.parameters(),
+            lr=self.hps.lr,
+            weight_decay=self.hps.l2_req)
+
+        # Model specific hps
+        self.sigma = 0.3
 
         # To record performances of the best epoch
         best_f_score = 0.0
@@ -232,35 +265,92 @@ class SumGANModel(Model):
         for epoch in range(self.hps.epochs_max):
 
             print("Epoch: {0:6}".format(str(epoch+1)+"/"+str(self.hps.epochs_max)), end='')
-            train_avg_loss = []
+            train_avg_D_x = []
+            train_avg_D_x_hat = []
             random.shuffle(train_keys)
 
             # For each training video
             for key in train_keys:
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, n_features)
-                target = dataset['gtscore'][...]
-                target = torch.from_numpy(target).unsqueeze(1) # (seq_len, 1, 1)
+                x = dataset['features'][...]
+                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
+                y = dataset['gtscore'][...]
+                y = torch.from_numpy(y).unsqueeze(1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
-                target -= target.min()
-                target /= target.max()
+                y -= y.min()
+                y /= y.max()
 
                 if self.hps.use_cuda:
-                    seq, target = seq.float().cuda(), target.float().cuda()
+                    x, y = x.float().cuda(), y.float().cuda()
 
-                y = self.model(seq)
+                ###############################
+                # Selector and Encoder update
+                ###############################
+                # Forward
+                x_hat, (mu, logvar), scores = self.summarizer(x)
+                probs_real, h_real = self.gan(x)
+                probs_fake, h_fake = self.gan(x_hat)
 
-                loss = criterion(y, target)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-                train_avg_loss.append(float(loss))
+                # Losses
+                loss_recons = self.loss_recons(h_real, h_fake)
+                loss_prior = self.loss_prior(mu, logvar)
+                loss_sparsity = self.loss_sparsity(scores, self.sigma)
+                loss_s_e = loss_recons + loss_prior + loss_sparsity
 
-            # Average training loss value of epoch
-            train_avg_loss = np.mean(np.array(train_avg_loss))
-            print("   Train loss: {0:.05f}".format(train_avg_loss, end=''))
+                # Update
+                self.s_e_optimizer.zero_grad()
+                loss_s_e.backward()
+                # TODO: gradient clip
+                # https://github.com/j-min/Adversarial_Video_Summary/blob/master/solver.py#L144
+                self.s_e_optimizer.step()
+
+                ###############################
+                # Decoder update
+                ###############################
+                # Forward
+                x_hat, (mu, logvar), scores = self.summarizer(x)
+                _, h_real = self.gan(x)
+                probs_fake, h_fake = self.gan(x_hat)
+
+                # Losses
+                loss_recons = self.loss_recons(h_real, h_fake)
+                loss_gan = self.loss_gan_generator(probs_fake)
+                loss_d = loss_recons + loss_gan
+
+                # Update
+                self.d_optimizer.zero_grad()
+                loss_d.backward()
+                # TODO: gradient clip
+                self.d_optimizer.step()
+
+                ###############################
+                # Discriminator update
+                ###############################
+                # Forward
+                x_hat, (mu, logvar), scores = self.summarizer(x)
+                probs_real, h_real = self.gan(x)
+                probs_fake, h_fake = self.gan(x_hat)
+
+                # Losses
+                loss_c = self.loss_gan_discriminator(probs_real, probs_fake)
+
+                # Update
+                self.c_optimizer.zero_grad()
+                loss_c.backward()
+                # TODO: gradient clip
+                self.c_optimizer.step()
+
+                ###############################
+                # Record losses
+                ###############################
+                train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
+                train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
+
+            # Average probs for real and fake data
+            print("   D(x): {0:.05f}   D(x_hat): {0:.05f}".format(
+              np.mean(train_avg_D_x), np.mean(train_avg_D_x_hat),
+            end=''))
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
@@ -278,14 +368,14 @@ class SumGANModel(Model):
         summary = {}
         with torch.no_grad():
             for key in test_keys:
-                seq = self.dataset[key]['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
+                x = self.dataset[key]['features'][...]
+                x = torch.from_numpy(x).unsqueeze(0)
 
                 if self.hps.use_cuda:
-                    seq = seq.float().cuda()
+                    x = x.float().cuda()
 
-                y = self.model(seq)
-                summary[key] = y[0].detach().cpu().numpy()
+                _, _, scores = self.summarizer(x)
+                summary[key] = scores[0].detach().cpu().numpy()
 
         f_score = self._eval_summary(summary, test_keys)
         return f_score
@@ -305,9 +395,9 @@ if __name__ == "__main__":
     assert x.shape[1] == x_hat.shape[1]
     assert x.shape[2] == x_hat.shape[2]
 
-    model = Discriminator().cuda()
+    model = GAN().cuda()
     x = torch.randn(10, 3, 1024).cuda()
-    probs = model(x)
+    probs, h = model(x)
     print(x.shape, probs.shape)
     assert x.shape[1] == probs.shape[0]
     assert probs.shape[1] == 1

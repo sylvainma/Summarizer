@@ -27,14 +27,16 @@ class HParameters:
 
         # Project root directory
         self.root = ''
-        self.datasets = ['datasets/eccv16_dataset_summe_google_pool5.h5',
-                        'datasets/eccv16_dataset_tvsum_google_pool5.h5',
-                        'datasets/eccv16_dataset_ovp_google_pool5.h5',
-                        'datasets/eccv16_dataset_youtube_google_pool5.h5']
+        # self.datasets = ['datasets/eccv16_dataset_summe_google_pool5.h5',
+        #                 'datasets/eccv16_dataset_tvsum_google_pool5.h5',
+        #                 'datasets/eccv16_dataset_ovp_google_pool5.h5',
+        #                 'datasets/eccv16_dataset_youtube_google_pool5.h5']
+        self.datasets = ['datasets/summarizer_dataset_summe_google_pool5.h5',
+                        'datasets/summarizer_dataset_tvsum_google_pool5.h5']
 
         # Split files to be trained/tested on
         self.splits_files = [
-            # 'splits/tvsum_splits.json',
+            'splits/tvsum_splits.json',
             'splits/summe_splits.json'
         ]
 

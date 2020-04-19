@@ -104,7 +104,8 @@ class dLSTM(nn.Module):
         for i in range(seq_len):
             x, (h, c) = self.forward_step(x, h, c)
             x_hat.append(self.recons(x))
-        x_hat = torch.cat(x_hat, dim=0) # TODO: reverse according to paper
+        x_hat = torch.cat(x_hat, dim=0)
+        x_hat = torch.flip(x_hat, (0,)) # reverse
         return x_hat
 
 class VAE(nn.Module):
@@ -141,11 +142,19 @@ class VAE(nn.Module):
         return x_hat, (h_mu, h_logvar)
 
 class Summarizer(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=2048, num_layers=2):
-        """Summarizer: Selector + VAE"""
+    def __init__(self, input_size=1024, sLSTM_hidden_size=1024, sLSTM_num_layers=2,
+                     edLSTM_hidden_size=2048, edLSTM_num_layers=2):
+        """Summarizer: Selector (sLSTM) + VAE (eLSTM/dLSTM).
+        Args
+          input_size: size of the frame feature descriptor
+          sLSTM_hidden_size: hidden size of sLSTM
+          sLSTM_num_layers: number of layers of sLSTM
+          edLSTM_hidden_size: hidden size of eLSTM and dLSTM
+          edLSTM_num_layers: number of layers of eLSTM and dLSTM
+        """
         super(Summarizer, self).__init__()
-        self.s_lstm = sLSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers)
-        self.vae = VAE(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers)
+        self.s_lstm = sLSTM(input_size=input_size, hidden_size=sLSTM_hidden_size, num_layers=sLSTM_num_layers)
+        self.vae = VAE(input_size=input_size, hidden_size=edLSTM_hidden_size, num_layers=edLSTM_num_layers)
 
     def forward(self, x):
         """
@@ -190,7 +199,12 @@ class cLSTM(nn.Module):
 
 class GAN(nn.Module):
     def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
-        """GAN: discriminator"""
+        """GAN: discriminator.
+        Args
+          input_size: size of the frame feature descriptor
+          hidden_size: hidden size of cLSTM
+          num_layers: number of layers of cLSTM
+        """
         super(GAN, self).__init__()
         self.c_lstm = cLSTM(
           input_size=input_size,
@@ -236,26 +250,33 @@ class SumGANModel(Model):
         return model
 
     def loss_recons(self, h_real, h_fake):
+        """minimize E[l2_norm(phi(x) - phi(x_hat))]"""
         return torch.norm(h_real - h_fake, p=2)
 
     def loss_prior(self, mu, logvar):
+        """minimize -D_KL(q(e|x) || p(e))"""
         return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     def loss_sparsity(self, scores, sigma):
+        """minimize l2_norm(E[s_t] - sigma)"""
         return torch.abs(torch.mean(scores) - sigma)
 
     def loss_gan_generator(self, probs_fake):
         """maximize E[log(cLSTM(x_hat))]"""
-        return -torch.mean(torch.log(probs_fake))
+        label_real = torch.full_like(probs_fake, 1.0).to(probs_fake.device)
+        return self.loss_BCE(probs_fake, label_real)
 
     def loss_gan_discriminator(self, probs_real, probs_fake):
         """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))]"""
-        return -torch.mean(torch.log(probs_real) + torch.log(1 - probs_fake))
+        label_real = torch.full_like(probs_real, 1.0).to(probs_real.device)
+        label_fake = torch.full_like(probs_fake, 0.0).to(probs_fake.device)
+        return self.loss_BCE(probs_real, label_real) + self.loss_BCE(probs_fake, label_fake)
 
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
-
+        
+        # Optimization
         self.s_e_optimizer = torch.optim.Adam(
             list(self.summarizer.s_lstm.parameters())
             + list(self.summarizer.vae.e_lstm.parameters()),
@@ -270,8 +291,8 @@ class SumGANModel(Model):
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
 
-        # Model specific hps
-        self.sigma = 0.3
+        # BCE loss for GAN optimization
+        self.loss_BCE = nn.BCELoss()
 
         # To record performances of the best epoch
         best_f_score = 0.0
@@ -315,8 +336,7 @@ class SumGANModel(Model):
 
                 # Update
                 loss_s_e.backward()
-                # TODO: gradient clip
-                # https://github.com/j-min/Adversarial_Video_Summary/blob/master/solver.py#L144
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                 self.s_e_optimizer.step()
                 self.s_e_optimizer.zero_grad()
 
@@ -335,7 +355,7 @@ class SumGANModel(Model):
 
                 # Update
                 loss_d.backward()
-                # TODO: gradient clip
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                 self.d_optimizer.step()
                 self.d_optimizer.zero_grad()
 
@@ -352,7 +372,7 @@ class SumGANModel(Model):
 
                 # Update
                 loss_c.backward()
-                # TODO: gradient clip
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                 self.c_optimizer.step()
                 self.c_optimizer.zero_grad()
 
@@ -363,9 +383,9 @@ class SumGANModel(Model):
                 train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
 
             # Average probs for real and fake data
-            print("   D(x): {0:.05f}   D(x_hat): {0:.05f}".format(
+            print("   D(x): {0:.05f}   D(x_hat): {1:.05f}".format(
               np.mean(train_avg_D_x), np.mean(train_avg_D_x_hat),
-            end='')) 
+            end=''))
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:

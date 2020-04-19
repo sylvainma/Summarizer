@@ -62,7 +62,7 @@ class HParameters:
         if "model" in args:
             self.model_class = {
                 "baseline": LogisticRegressionModel,
-                "vasnet": VASNetModel, 
+                "vasnet": VASNetModel,
                 "DSN": DSNModel,
             }.get(args["model"], LogisticRegressionModel)
 

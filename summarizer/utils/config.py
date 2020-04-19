@@ -6,7 +6,7 @@ from torch.autograd import Variable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils import parse_splits_filename
 from summarizer.models.vasnet import VASNetModel
-from summarizer.models.vasnet_mod import VASNetModelMod
+from summarizer.models.DSN import DSNModel
 from summarizer.models.baseline import LogisticRegressionModel
 
 
@@ -63,7 +63,7 @@ class HParameters:
             self.model_class = {
                 "baseline": LogisticRegressionModel,
                 "vasnet": VASNetModel, 
-                "vasnetmod":VASNetModelMod
+                "DSN": DSNModel,
             }.get(args["model"], LogisticRegressionModel)
 
         # Other dynamic properties

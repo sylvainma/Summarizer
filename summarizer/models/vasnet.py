@@ -5,7 +5,6 @@ import h5py
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.nn.init as init
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
@@ -13,127 +12,151 @@ from summarizer.models import Model
 """
 Summarizing Videos with Attention
 https://arxiv.org/abs/1812.01969
+
 """
 
-class LayerNorm(nn.Module):
-    def __init__(self, features, eps=1e-6):
-        super(LayerNorm, self).__init__()
-        self.gamma = nn.Parameter(torch.ones(features))
-        self.beta = nn.Parameter(torch.zeros(features))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
-
-
-class SelfAttention(nn.Module):
-    def __init__(self, apperture=-1, ignore_itself=False, input_size=1024, output_size=1024):
-        super(SelfAttention, self).__init__()
-
-        self.apperture = apperture
-        self.ignore_itself = ignore_itself
-
-        self.m = input_size
-        self.output_size = output_size
-
-        self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.output_linear = nn.Linear(in_features=self.output_size, out_features=self.m, bias=False)
-
-        self.drop50 = nn.Dropout(0.5)
-
-    def forward(self, x):
-        n = x.shape[0]  # sequence length
-
-        K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
-        Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
-        V = self.V(x)
-
-        Q *= 0.06
-        logits = torch.matmul(Q, K.transpose(1, 0))
-
-        if self.ignore_itself:
-            # Zero the diagonal activations (a distance of each frame with itself)
-            logits[torch.eye(n).byte()] = -float("Inf")
-
-        if self.apperture > 0:
-            # Set attention to zero to frames further than +/- apperture from the current one
-            onesmask = torch.ones(n, n)
-            trimask = torch.tril(onesmask, -self.apperture) + torch.triu(onesmask, self.apperture)
-            logits[trimask == 1] = -float("Inf")
-
-        att_weights_ = nn.functional.softmax(logits, dim=-1)
-        weights = self.drop50(att_weights_)
-        y = torch.matmul(V.transpose(1, 0), weights).transpose(1, 0)
-        y = self.output_linear(y)
-
-        return y, att_weights_
-
-
 class VASNet(nn.Module):
-    def __init__(self):
+    def __init__(self, feature_dim=1024, max_length=None, pos_embed="simple", ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
         super(VASNet, self).__init__()
 
-        self.m = 1024 # cnn features size
-        self.hidden_size = 1024
+        # feature dimension that is the the dimensionality of the key, query and value vectors
+        # as well as the hidden dimension for the FF layers
+        self.feature_dim = feature_dim
 
-        self.att = SelfAttention(input_size=self.m, output_size=self.m)
-        self.ka = nn.Linear(in_features=self.m, out_features=1024)
-        self.kb = nn.Linear(in_features=self.ka.out_features, out_features=1024)
-        self.kc = nn.Linear(in_features=self.kb.out_features, out_features=1024)
-        self.kd = nn.Linear(in_features=self.ka.out_features, out_features=1)
+        # Aperture to control the range of attention. If None, all frames are considered (global attn.)
+        # If this is an integer w, frames [t-w, t+w] will be considered (local attention)
+        self.aperture = attention_aperture
+        
+        # Whether to include the frame x_t in computing attention weights
+        self.ignore_self = ignore_self
 
-        self.sig = nn.Sigmoid()
+        # scaling factor to have more stable gradients. VasNet recommends 0.06,
+        # but self-attention defaults to 1/square root of the dimension of the key vectors.
+        self.scale = scale if scale is not None else 1 / np.sqrt(self.feature_dim)
+
+        # Optional positional embeddings
+        self.max_length = max_length
+        if self.max_length:
+            self.pos_embed_type = pos_embed
+
+            if self.pos_embed_type == "simple":
+                self.pos_embed = torch.nn.Embedding(self.max_length, self.feature_dim)
+            elif self.pos_embed_type == "attention":
+                self.pos_embed = torch.zeros(self.max_length, self.feature_dim)
+                for pos in np.arange(self.max_length):
+                    for i in np.arange(0, self.feature_dim, 2):
+                        self.pos_embed[pos, i] = np.sin(pos / (10000 ** ((2 * i)/self.feature_dim)))
+                        self.pos_embed[pos, i + 1] = np.cos(pos / (10000 ** ((2 * (i + 1))/self.feature_dim)))
+            else:
+                self.max_length = None
+
+        # Common steps
+        self.dropout = nn.Dropout(0.5)
+        self.layer_norm = torch.nn.LayerNorm(self.feature_dim, epsilon)
+
+        # self-attention layers
+        self.K = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
+        self.Q = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
+        self.V = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
+        self.attention_head_projection = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
+        self.softmax = nn.Softmax(dim=2)
+
+        # FFNN layers
+        self.k1 = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim)
+        self.k2 = nn.Linear(in_features=self.feature_dim, out_features=1)
+        self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
-        self.drop50 = nn.Dropout(0.5)
-        self.softmax = nn.Softmax(dim=0)
-        self.layer_norm_y = LayerNorm(self.m)
-        self.layer_norm_ka = LayerNorm(self.ka.out_features)
+
+        # Linear layers weights initialization
+        # VasNet uses a Xavier uniform initialization with a gain of sqrt(2) by default
+        if weight_init.lower() in ["he", "kaiming"]:
+            init.kaiming_uniform_(self.K.weight)
+            init.kaiming_uniform_(self.Q.weight)
+            init.kaiming_uniform_(self.V.weight)
+            init.kaiming_uniform_(self.attention_head_projection.weight)
+
+            init.kaiming_uniform_(self.k1.weight)
+            init.kaiming_uniform_(self.k2.weight)
+        else:
+            init.xavier_uniform_(self.K.weight, gain=np.sqrt(2.0))
+            init.xavier_uniform_(self.Q.weight, gain=np.sqrt(2.0))
+            init.xavier_uniform_(self.V.weight, gain=np.sqrt(2.0))
+            init.xavier_uniform_(self.attention_head_projection.weight, gain=np.sqrt(2.0))
+
+            init.xavier_uniform_(self.k1.weight, gain=np.sqrt(2.0))
+            init.xavier_uniform_(self.k2.weight, gain=np.sqrt(2.0))
+
+        init.constant_(self.k1.bias, 0.1)
+        init.constant_(self.k2.bias, 0.1)
+
 
     def forward(self, x):
-        m = x.shape[2] # Feature size
+        batch_size, seq_len, feature_dim = x.shape
 
-        # Place the video frames to the batch dimension to allow for batch arithm. operations.
-        # Assumes input batch size = 1.
-        x = x.view(-1, m)
-        y, att_weights_ = self.att(x)
+        negative_inf = float('-inf')
 
-        y = y + x
-        y = self.drop50(y)
-        y = self.layer_norm_y(y)
+        assert self.feature_dim == feature_dim
 
-        # Frame level importance score regression
-        # Two layer NN
-        y = self.ka(y)
+        if self.max_length is not None:
+            assert self.max_length >= seq_len
+            if self.pos_embed_type == "simple":
+                pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
+                x += self.pos_embed(pos_tensor)
+            elif self.pos_embed_type == "attention":
+                x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, feature_dim).to(x.device)
+
+        K = self.K(x)
+        Q = self.Q(x)
+        V = self.V(x)
+
+        e = torch.bmm(Q, torch.transpose(K, 1, 2))
+        e = e * self.scale
+
+        if self.ignore_self:
+            e[:, torch.eye(seq_len).bool()] = negative_inf
+
+        if self.aperture is not None:
+            assert isinstance(self.aperture, int)
+            scope_mask = torch.mul(torch.tril(e, diagonal=self.aperture), torch.triu(e, diagonal=-self.aperture)) 
+            e[scope_mask == 0] = negative_inf
+
+        alpha = self.softmax(e)
+        alpha = self.dropout(alpha)
+        c = torch.bmm(alpha, V)
+        c = self.attention_head_projection(c)
+
+        # Residual connection
+        y = c + x
+        y = self.dropout(y)
+        y = self.layer_norm(y)
+
+        # Two layer FFNN
+        y = self.k1(y)
         y = self.relu(y)
-        y = self.drop50(y)
-        y = self.layer_norm_ka(y)
-
-        y = self.kd(y)
-        y = self.sig(y)
-        y = y.view(1, -1)
+        y = self.dropout(y)
+        y = self.layer_norm(y)
+        y = self.k2(y)
+        y = self.sigmoid(y)
+        y = y.view(batch_size, -1)
 
         return y
 
 
 class VASNetModel(Model):
     def _init_model(self):
-        model = VASNet()
-        def weights_init(m):
-            classname = m.__class__.__name__
-            if classname == 'Linear':
-                init.xavier_uniform_(m.weight, gain=np.sqrt(2.0))
-                if m.bias is not None:
-                    init.constant_(m.bias, 0.1)
-        model.apply(weights_init)
+        model = VASNet(
+            max_length=int(self.hps.extra_params["max_pos"]) if "max_pos" in self.hps.extra_params else None,
+            pos_embed=self.hps.extra_params.get("pos_embed", "simple"),
+            ignore_self=bool(self.hps.extra_params.get("ignore_self", False)),
+            attention_aperture=int(self.hps.extra_params["local"]) if "local" in self.hps.extra_params else None,
+            epsilon=float(self.hps.extra_params.get("epsilon", 1e-6)), 
+            weight_init=self.hps.extra_params.get("weight_init", "xavier")
+        )
+
         cuda_device = self.hps.cuda_device
         if self.hps.use_cuda:
             print("Setting CUDA device: ", cuda_device)
             torch.cuda.set_device(cuda_device)
-            #torch.cuda.manual_seed(seed) #TODO: Consider uncommenting if implementing a seed selection at some point
         if self.hps.use_cuda:
             model.cuda()
         return model
@@ -175,17 +198,15 @@ class VASNetModel(Model):
                     seq, target = seq.float().cuda(), target.float().cuda()
 
                 y = self.model(seq)
-                loss_att = 0
 
                 loss = criterion(y, target)
-                loss = loss + loss_att
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                train_avg_loss.append([float(loss), float(loss_att)])
+                train_avg_loss.append(float(loss))
 
             # Average training loss value of epoch
-            train_avg_loss = np.mean(np.array(train_avg_loss)[:, 0])
+            train_avg_loss = np.mean(np.array(train_avg_loss))
             print("   Train loss: {0:.05f}".format(train_avg_loss, end=''))
 
             # Evaluate performances on test keys

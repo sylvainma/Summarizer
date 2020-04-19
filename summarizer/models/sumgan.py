@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions.bernoulli import Bernoulli
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
 
@@ -156,7 +157,7 @@ class Summarizer(nn.Module):
         self.s_lstm = sLSTM(input_size=input_size, hidden_size=sLSTM_hidden_size, num_layers=sLSTM_num_layers)
         self.vae = VAE(input_size=input_size, hidden_size=edLSTM_hidden_size, num_layers=edLSTM_num_layers)
 
-    def forward(self, x):
+    def forward(self, x, uniform=False, p=0.3):
         """
         Input 
           x: (seq_len, batch_size, input_size)
@@ -165,7 +166,13 @@ class Summarizer(nn.Module):
           h_mu, h_logvar: (num_layers, batch_size, hidden_size)
           scores: (seq_len, batch_size, 1)
         """
-        scores = self.s_lstm(x)
+        if uniform:
+            seq_len, batch_size, _ = x.size()
+            dist = Bernoulli(torch.full((seq_len, batch_size, 1), p).to(x.device))
+            scores = dist.sample()
+        else:
+            scores = self.s_lstm(x)
+        
         x_weighted = x * scores
         x_hat, (h_mu, h_logvar) = self.vae(x_weighted)
         return x_hat, (h_mu, h_logvar), scores
@@ -222,6 +229,29 @@ class GAN(nn.Module):
         probs, h_last_top = self.c_lstm(x)
         return probs, h_last_top
 
+class SumGAN(nn.Module):
+    def __init__(self, input_size=1024, sLSTM_hidden_size=1024, sLSTM_num_layers=2, 
+                        edLSTM_hidden_size=2048, edLSTM_num_layers=2,
+                        cLSTM_hidden_size=1024, cLSTM_num_layers=2):
+        """SumGAN: Summarizer + GAN"""
+        super(SumGAN, self).__init__()
+        self.summarizer = Summarizer(
+            input_size=input_size,
+            sLSTM_hidden_size=sLSTM_hidden_size, sLSTM_num_layers=sLSTM_num_layers,
+            edLSTM_hidden_size=edLSTM_hidden_size, edLSTM_num_layers=edLSTM_num_layers)
+        self.gan = GAN(
+            input_size=input_size,
+            hidden_size=cLSTM_hidden_size, num_layers=cLSTM_num_layers)
+    
+    def forward(self, x):
+        """
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          scores: (seq_len, batch_size, 1)
+        """
+        return self.summarizer.s_lstm(x)
+
 
 class SumGANModel(Model):
     def _init_model(self):
@@ -237,14 +267,10 @@ class SumGANModel(Model):
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
 
         # Model
-        self.summarizer = Summarizer(
-            input_size=self.input_size,
+        model = SumGAN(input_size=self.input_size,
             sLSTM_hidden_size=self.sLSTM_hidden_size, sLSTM_num_layers=self.sLSTM_num_layers,
-            edLSTM_hidden_size=self.edLSTM_hidden_size, edLSTM_num_layers=self.edLSTM_num_layers)
-        self.gan = GAN(
-            input_size=self.input_size, 
-            hidden_size=self.cLSTM_hidden_size, num_layers=self.cLSTM_num_layers)
-        model = nn.ModuleList([self.summarizer, self.gan])
+            edLSTM_hidden_size=self.edLSTM_hidden_size, edLSTM_num_layers=self.edLSTM_num_layers,
+            cLSTM_hidden_size=self.cLSTM_hidden_size, cLSTM_num_layers=self.cLSTM_num_layers)
         
         print("SumGAN parameters:", sum([_.numel() for _ in model.parameters()]))
         return model
@@ -261,16 +287,17 @@ class SumGANModel(Model):
         """minimize l2_norm(E[s_t] - sigma)"""
         return torch.abs(torch.mean(scores) - sigma)
 
-    def loss_gan_generator(self, probs_fake):
-        """maximize E[log(cLSTM(x_hat))]"""
+    def loss_gan_generator(self, probs_fake, probs_uniform):
+        """maximize E[log(cLSTM(x_hat))] + E[log(cLSTM(x_hat_p))]"""
         label_real = torch.full_like(probs_fake, 1.0).to(probs_fake.device)
-        return self.loss_BCE(probs_fake, label_real)
+        return self.loss_BCE(probs_fake, label_real) + self.loss_BCE(probs_uniform, label_real)
 
-    def loss_gan_discriminator(self, probs_real, probs_fake):
-        """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))]"""
+    def loss_gan_discriminator(self, probs_real, probs_fake, probs_uniform):
+        """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))] + E[log(1 - cLSTM(x_hat_p))]"""
         label_real = torch.full_like(probs_real, 1.0).to(probs_real.device)
         label_fake = torch.full_like(probs_fake, 0.0).to(probs_fake.device)
-        return self.loss_BCE(probs_real, label_real) + self.loss_BCE(probs_fake, label_fake)
+        return self.loss_BCE(probs_real, label_real) + self.loss_BCE(probs_fake, label_fake) \
+                    + self.loss_BCE(probs_uniform, label_fake)
 
     def train(self, fold):
         self.model.train()
@@ -278,16 +305,16 @@ class SumGANModel(Model):
         
         # Optimization
         self.s_e_optimizer = torch.optim.Adam(
-            list(self.summarizer.s_lstm.parameters())
-            + list(self.summarizer.vae.e_lstm.parameters()),
+            list(self.model.summarizer.s_lstm.parameters())
+            + list(self.model.summarizer.vae.e_lstm.parameters()),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
         self.d_optimizer = torch.optim.Adam(
-            self.summarizer.vae.d_lstm.parameters(),
+            self.model.summarizer.vae.d_lstm.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
         self.c_optimizer = torch.optim.Adam(
-            self.gan.c_lstm.parameters(),
+            self.model.gan.c_lstm.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
 
@@ -300,7 +327,10 @@ class SumGANModel(Model):
         # For each epoch
         for epoch in range(self.hps.epochs_max):
 
-            print("Epoch: {0:6}".format(str(epoch+1)+"/"+str(self.hps.epochs_max)), end='')
+            print("Epoch: {0:6}".format(str(epoch+1)+"/"+str(self.hps.epochs_max)), end="")
+            train_avg_loss_s_e = []
+            train_avg_loss_d = []
+            train_avg_loss_c = []
             train_avg_D_x = []
             train_avg_D_x_hat = []
             random.shuffle(train_keys)
@@ -308,9 +338,9 @@ class SumGANModel(Model):
             # For each training video
             for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
-                x = dataset['features'][...]
+                x = dataset["features"][...]
                 x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
-                y = dataset['gtscore'][...]
+                y = dataset["gtscore"][...]
                 y = torch.from_numpy(y).unsqueeze(1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
@@ -324,9 +354,9 @@ class SumGANModel(Model):
                 # Selector and Encoder update
                 ###############################
                 # Forward
-                x_hat, (mu, logvar), scores = self.summarizer(x)
-                probs_real, h_real = self.gan(x)
-                probs_fake, h_fake = self.gan(x_hat)
+                x_hat, (mu, logvar), scores = self.model.summarizer(x)
+                _, h_real = self.model.gan(x)
+                _, h_fake = self.model.gan(x_hat)
 
                 # Losses
                 loss_recons = self.loss_recons(h_real, h_fake)
@@ -344,13 +374,15 @@ class SumGANModel(Model):
                 # Decoder update
                 ###############################
                 # Forward
-                x_hat, (mu, logvar), scores = self.summarizer(x)
-                _, h_real = self.gan(x)
-                probs_fake, h_fake = self.gan(x_hat)
+                x_hat, (mu, logvar), scores = self.model.summarizer(x)
+                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                _, h_real = self.model.gan(x)
+                probs_fake, h_fake = self.model.gan(x_hat)
+                probs_uniform, _ = self.model.gan(x_hat_p)
 
                 # Losses
                 loss_recons = self.loss_recons(h_real, h_fake)
-                loss_gan = self.loss_gan_generator(probs_fake)
+                loss_gan = self.loss_gan_generator(probs_fake, probs_uniform)
                 loss_d = loss_recons + loss_gan
 
                 # Update
@@ -363,12 +395,14 @@ class SumGANModel(Model):
                 # Discriminator update
                 ###############################
                 # Forward
-                x_hat, (mu, logvar), scores = self.summarizer(x)
-                probs_real, h_real = self.gan(x)
-                probs_fake, h_fake = self.gan(x_hat)
+                x_hat, (mu, logvar), scores = self.model.summarizer(x)
+                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                probs_real, _ = self.model.gan(x)
+                probs_fake, _ = self.model.gan(x_hat)
+                probs_uniform, _ = self.model.gan(x_hat_p)
 
                 # Losses
-                loss_c = self.loss_gan_discriminator(probs_real, probs_fake)
+                loss_c = self.loss_gan_discriminator(probs_real, probs_fake, probs_uniform)
 
                 # Update
                 loss_c.backward()
@@ -379,13 +413,17 @@ class SumGANModel(Model):
                 ###############################
                 # Record losses
                 ###############################
+                train_avg_loss_s_e.append(float(loss_s_e))
+                train_avg_loss_d.append(float(loss_d))
+                train_avg_loss_c.append(float(loss_c))
                 train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
                 train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
 
-            # Average probs for real and fake data
-            print("   D(x): {0:.05f}   D(x_hat): {1:.05f}".format(
+            # Average probs for real and fake data by the end of the epoch
+            print("   Lse: {:.05f}   Ld: {:.05f}   Lc: {:.05f}   D(x): {:.05f}   D(x_hat): {:.05f}".format(
+              np.mean(train_avg_loss_s_e), np.mean(train_avg_loss_d), np.mean(train_avg_loss_c),
               np.mean(train_avg_D_x), np.mean(train_avg_D_x_hat),
-            end=''))
+            end=""))
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
@@ -406,13 +444,13 @@ class SumGANModel(Model):
         summary = {}
         with torch.no_grad():
             for key in test_keys:
-                x = self.dataset[key]['features'][...]
+                x = self.dataset[key]["features"][...]
                 x = torch.from_numpy(x).unsqueeze(0)
 
                 if self.hps.use_cuda:
                     x = x.float().cuda()
 
-                _, _, scores = self.summarizer(x)
+                _, _, scores = self.model.summarizer(x)
                 summary[key] = scores[0].detach().cpu().numpy()
 
         f_score = self._eval_summary(summary, test_keys)
@@ -420,7 +458,7 @@ class SumGANModel(Model):
 
 
 if __name__ == "__main__":
-    model = nn.ModuleList([Summarizer(), GAN()])
+    model = SumGAN()
     print("Parameters:", sum([_.numel() for _ in model.parameters()]))
 
     model = Summarizer()
@@ -442,4 +480,3 @@ if __name__ == "__main__":
     print(x.shape, probs.shape)
     assert x.shape[1] == probs.shape[0]
     assert probs.shape[1] == 1
-

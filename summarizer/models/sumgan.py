@@ -265,6 +265,7 @@ class SumGANModel(Model):
         self.edLSTM_num_layers = int(self.hps.extra_params.get("edLSTM_num_layers", 2))
         self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
+        self.sup = bool(self.hps.extra_params.get("sup", False))
 
         # Model
         model = SumGAN(input_size=self.input_size,
@@ -286,6 +287,10 @@ class SumGANModel(Model):
     def loss_sparsity(self, scores, sigma):
         """minimize l2_norm(E[s_t] - sigma)"""
         return torch.abs(torch.mean(scores) - sigma)
+
+    def loss_sparsity_sup(self, scores, gtscores):
+        """minimize BCE(scores, gtscores)"""
+        return self.loss_BCE(scores, gtscores)
 
     def loss_gan_generator(self, probs_fake, probs_uniform):
         """maximize E[log(cLSTM(x_hat))] + E[log(cLSTM(x_hat_p))]"""
@@ -320,6 +325,8 @@ class SumGANModel(Model):
 
         # BCE loss for GAN optimization
         self.loss_BCE = nn.BCELoss()
+        if self.hps.use_cuda:
+            self.loss_BCE.cuda()
 
         # To record performances of the best epoch
         best_f_score = 0.0
@@ -341,7 +348,7 @@ class SumGANModel(Model):
                 x = dataset["features"][...]
                 x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
                 y = dataset["gtscore"][...]
-                y = torch.from_numpy(y).unsqueeze(1) # (seq_len, 1, 1)
+                y = torch.from_numpy(y).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
                 y -= y.min()
@@ -361,7 +368,10 @@ class SumGANModel(Model):
                 # Losses
                 loss_recons = self.loss_recons(h_real, h_fake)
                 loss_prior = self.loss_prior(mu, logvar)
-                loss_sparsity = self.loss_sparsity(scores, self.sigma)
+                if self.sup:
+                    loss_sparsity = self.loss_sparsity_sup(scores, y)
+                else:
+                    loss_sparsity = self.loss_sparsity(scores, self.sigma)
                 loss_s_e = loss_recons + loss_prior + loss_sparsity
 
                 # Update

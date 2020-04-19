@@ -1,3 +1,4 @@
+
 # Python gitignore
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -132,3 +133,6 @@ dmypy.json
 # Editor settings
 .metals/
 .vscode/
+
+# Finally untrack datasets (no money for git lfs bro)
+*.h5

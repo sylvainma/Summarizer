@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for f in *.webm
+for f in *.mp4
 do
   echo "Processing $f file..."
   # take action on each file. $f store current file name\

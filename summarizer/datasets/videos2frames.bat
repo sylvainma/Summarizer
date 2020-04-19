@@ -1,5 +1,5 @@
 @echo off
-FOR /R %%f IN (*.webm) DO (
+FOR /R %%f IN (*.mp4) DO (
   @echo "Processing %%f file..."
   REM take action on each file. %%f store current file name 
   if not exist "%%~dpf\frames\%%~nf" mkdir "%%~dpf\frames\%%~nf"

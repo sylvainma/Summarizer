@@ -51,14 +51,14 @@ class DSNModel(Model):
         self.num_episode = 5
         return model
 
-    def train(self):
+    def train(self, fold):
         
         print("==> Start training")
         start_time = time.time()
        
         self.model.train()
         
-        train_keys = self.split["train_keys"][:]
+        train_keys, _ = self._get_train_test_keys(fold)
         baselines = {key: 0. for key in train_keys} # baseline rewards for videos
         reward_writers = {key: [] for key in train_keys} # record reward changes for each video
 
@@ -112,7 +112,7 @@ class DSNModel(Model):
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
-                f_score = self.test()
+                f_score = self.test(fold)
                 self.model.train()
                 if f_score > best_f_score:
                     best_f_score = f_score
@@ -120,9 +120,9 @@ class DSNModel(Model):
 
         return best_f_score
 
-    def test(self):
+    def test(self, fold):
         self.model.eval()
-        test_keys = self.split["test_keys"][:]
+        _, test_keys = self._get_train_test_keys(fold)
         summary = {}
         with torch.no_grad():
             for key in test_keys:

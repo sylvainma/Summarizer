@@ -273,7 +273,6 @@ class SumGANModel(Model):
             edLSTM_hidden_size=self.edLSTM_hidden_size, edLSTM_num_layers=self.edLSTM_num_layers,
             cLSTM_hidden_size=self.cLSTM_hidden_size, cLSTM_num_layers=self.cLSTM_num_layers)
         
-        print("SumGAN parameters:", sum([_.numel() for _ in model.parameters()]))
         return model
 
     def loss_recons(self, h_real, h_fake):

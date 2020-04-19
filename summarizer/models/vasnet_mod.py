@@ -15,7 +15,7 @@ https://arxiv.org/abs/1812.01969
 """
 
 class VASNetMod(nn.Module):
-    def __init__(self, feature_dim=1024, max_length=None, ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
+    def __init__(self, feature_dim=1024, max_length=None, pos_embed="simple", ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
         super(VASNetMod, self).__init__()
 
         # feature dimension that is the the dimensionality of the key, query and value vectors
@@ -36,7 +36,18 @@ class VASNetMod(nn.Module):
         # Optional positional embeddings
         self.max_length = max_length
         if self.max_length:
-            self.pos_embed = torch.nn.Embedding(self.max_length, self.feature_dim)
+            self.pos_embed_type = pos_embed
+
+            if self.pos_embed_type == "simple":
+                self.pos_embed = torch.nn.Embedding(self.max_length, self.feature_dim)
+            elif self.pos_embed_type == "attention":
+                self.pos_embed = torch.zeros(self.max_length, self.feature_dim)
+                for pos in np.arange(self.max_length):
+                    for i in np.arange(0, self.feature_dim, 2):
+                        self.pos_embed[pos, i] = np.sin(pos / (10000 ** ((2 * i)/self.feature_dim)))
+                        self.pos_embed[pos, i + 1] = np.cos(pos / (10000 ** ((2 * (i + 1))/self.feature_dim)))
+            else:
+                self.max_length = None
 
         # Common steps
         self.dropout = nn.Dropout(0.5)
@@ -84,10 +95,14 @@ class VASNetMod(nn.Module):
         negative_inf = float('-inf')
 
         assert self.feature_dim == feature_dim
+
         if self.max_length is not None:
             assert self.max_length >= seq_len
-            pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
-            x += self.pos_embed(pos_tensor)
+            if self.pos_embed_type == "simple":
+                pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
+                x += self.pos_embed(pos_tensor)
+            elif self.pos_embed_type == "attention":
+                x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, feature_dim).to(x.device)
 
         K = self.K(x)
         Q = self.Q(x)
@@ -129,7 +144,8 @@ class VASNetMod(nn.Module):
 class VASNetModelMod(Model):
     def _init_model(self):
         model = VASNetMod(
-            max_length=int(self.hps.extra_params["pos_embed"]) if "pos_embed" in self.hps.extra_params else None,
+            max_length=int(self.hps.extra_params["max_pos"]) if "max_pos" in self.hps.extra_params else None,
+            pos_embed=self.hps.extra_params["pos_embed"] if "pos_embed" in self.hps.extra_params else "simple",
             ignore_self=self.hps.extra_params["ignore_self"] if "ignore_self" in self.hps.extra_params else False,
             attention_aperture=int(self.hps.extra_params["local"]) if "local" in self.hps.extra_params else None,
             epsilon=float(self.hps.extra_params["epsilon"]) if "epsilon" in self.hps.extra_params else 1e-6, 

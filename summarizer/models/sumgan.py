@@ -20,9 +20,9 @@ class sLSTM(nn.Module):
         """Selector LSTM"""
         super(sLSTM, self).__init__()
         self.lstm = nn.LSTM(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            num_layers=num_layers, 
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
             bidirectional=True
         )
         self.out = nn.Linear(hidden_size * 2, 1)

@@ -55,18 +55,19 @@ class Transformer(nn.Module):
         self.relu = nn.ReLU()
 
         # Weights initialization
-        if weight_init.lower() in ["he", "kaiming"]:
-            for i in np.arange(self.transformer_encoder.num_layers):
-                init.kaiming_uniform_(self.transformer_encoder.layers[i].linear1.weight)
-                init.kaiming_uniform_(self.transformer_encoder.layers[i].linear2.weight)
-            init.kaiming_uniform_(self.k1.weight)
-            init.kaiming_uniform_(self.k2.weight)
-        elif weight_init.lower() == "xavier":
-            for i in np.arange(self.transformer_encoder.num_layers):
-                init.xavier_uniform_(self.transformer_encoder.layers[i].linear1.weight)
-                init.xavier_uniform_(self.transformer_encoder.layers[i].linear2.weight)
-            init.xavier_uniform_(self.k1.weight)
-            init.xavier_uniform_(self.k2.weight)
+        if weight_init:
+            if weight_init.lower() in ["he", "kaiming"]:
+                for i in np.arange(self.transformer_encoder.num_layers):
+                    init.kaiming_uniform_(self.transformer_encoder.layers[i].linear1.weight)
+                    init.kaiming_uniform_(self.transformer_encoder.layers[i].linear2.weight)
+                init.kaiming_uniform_(self.k1.weight)
+                init.kaiming_uniform_(self.k2.weight)
+            elif weight_init.lower() == "xavier":
+                for i in np.arange(self.transformer_encoder.num_layers):
+                    init.xavier_uniform_(self.transformer_encoder.layers[i].linear1.weight)
+                    init.xavier_uniform_(self.transformer_encoder.layers[i].linear2.weight)
+                init.xavier_uniform_(self.k1.weight)
+                init.xavier_uniform_(self.k2.weight)
 
     def forward(self, x):
         batch_size, seq_len, feature_dim = x.shape

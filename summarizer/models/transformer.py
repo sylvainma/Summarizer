@@ -193,4 +193,21 @@ class TransformerModel(Model):
         return f_score
 
 if __name__ == "__main__":
-    pass
+    model = Transformer()
+    print("Trainable parameters in model:", sum([_.numel() for _ in model.parameters() if _.requires_grad]))
+
+    print()
+    print("Possible flags for Transformer:")
+    print("encoder_layers: an integer describing the number of encoder layers to use in the transformer. Default=6")
+    print("encoder_layers: an integer describing the number of attention heads to use in the transformer. Default=8")
+    print("max_pos: an integer describing the maximum length of a sequence (e.g. the number of frames in each video). Specify to use positional encodings. Default=None")
+    print("more_residuals. Specify to add a residual connection between before and after the encoder layers. Default=False")
+    print("max_pos: an integer describing the maximum length of a sequence (e.g. the number of frames in each video). Specify to use positional encodings. Default=None")
+    print("pos_embed: \"simple\" or \"attention\". Whether to use simple (embedding of the position of the image in sequence) or attention-based cos-sin positional encodings. Specify `max_pos` to use positional encodings. Default=simple")
+    print("epsilon: a float added to the denominator for numerical stability when performing layer normalization. Default=1e-5")
+    print("weight_init: \"xavier\" or \"he\"/\"kaiming\". Whether to use Xavier weight initialization, Kaiming initialization, or none. Default=None")
+
+    x = torch.randn(10, 3, 1024)
+    y = model(x)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[1] == y.shape[1]

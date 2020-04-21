@@ -239,4 +239,20 @@ class VASNetModel(Model):
         return f_score
 
 if __name__ == "__main__":
-    pass
+    model = VASNet()
+    print("Trainable parameters in model:", sum([_.numel() for _ in model.parameters() if _.requires_grad]))
+
+    print()
+    print("Possible flags for VasNet:")
+    print("max_pos: an integer describing the maximum length of a sequence (e.g. the number of frames in each video). Specify to use positional encodings. Default=None")
+    print("pos_embed: \"simple\" or \"attention\". Whether to use simple (embedding of the position of the image in sequence) or attention-based cos-sin positional encodings. Specify `max_pos` to use positional encodings. Default=simple")
+    print("ignore_self. Specify to use ignore the current frame in self-attention computation. Default=False")
+    print("local: an integer describing the window of frames centered around the current frame to consider when computing self-attention. Specify to use local (rather than global) attention. Default=None")
+    print("scale: a float scaling factor to have more stable gradients. VasNet recommends 0.06, but self-attention defaults to 1/square root of the dimension of the key vectors. Specify to use a custom (or the original VasNet) scale. Default=None")
+    print("epsilon: a float added to the denominator for numerical stability when performing layer normalization. Default=1e-6")
+    print("weight_init: \"xavier\" or \"he\"/\"kaiming\". Whether to use the Xavier-based weight initialization from the original VasNet implementation, or Kaiming initialization. Default=xavier")
+
+    x = torch.randn(10, 3, 1024)
+    y = model(x)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[1] == y.shape[1]

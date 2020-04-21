@@ -149,6 +149,7 @@ class VASNetModel(Model):
             pos_embed=self.hps.extra_params.get("pos_embed", "simple"),
             ignore_self=bool(self.hps.extra_params.get("ignore_self", False)),
             attention_aperture=int(self.hps.extra_params["local"]) if "local" in self.hps.extra_params else None,
+            scale=float(self.hps.extra_params["scale"]) if "scale" in self.hps.extra_params else None,
             epsilon=float(self.hps.extra_params.get("epsilon", 1e-6)), 
             weight_init=self.hps.extra_params.get("weight_init", "xavier")
         )

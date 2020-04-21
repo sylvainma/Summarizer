@@ -3,6 +3,7 @@ import sys
 import datetime
 import torch
 from torch.autograd import Variable
+from torch.utils.tensorboard import SummaryWriter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils import parse_splits_filename
 from summarizer.models.vasnet import VASNetModel
@@ -35,6 +36,9 @@ class HParameters:
         #                 'datasets/eccv16_dataset_youtube_google_pool5.h5']
         self.datasets = ['datasets/summarizer_dataset_summe_google_pool5.h5',
                         'datasets/summarizer_dataset_tvsum_google_pool5.h5']
+
+        # Cosmetic for Tensorboard
+        self.current_dataset = None
 
         # Split files to be trained/tested on
         self.splits_files = [
@@ -80,6 +84,7 @@ class HParameters:
         log_dir = str(int(datetime.datetime.now().timestamp()))
         log_dir += "_" + self.model_class.__name__
         self.log_path = os.path.join("logs", log_dir)
+        self.writer = SummaryWriter(self.log_path)
 
         # Handle use_cuda flag
         if self.use_cuda == "default":
@@ -140,6 +145,20 @@ class HParameters:
             info_str += "\n" if i < len(vars)-1 else ""
 
         return info_str
+
+    def get_full_hps_dict(self):
+        """Returns the list of hyperparameters as a flat dict"""
+        vars = ["current_dataset", "l2_req", "lr", "epochs_max"]
+
+        hps = {}
+        for i, var in enumerate(vars):
+            val = getattr(self, var)
+            if isinstance(val, Variable):
+                val = val.data.cpu().numpy().tolist()[0]
+            hps[var] = val
+
+        print(hps)
+        return hps
 
 if __name__ == "__main__":
     # Check default values

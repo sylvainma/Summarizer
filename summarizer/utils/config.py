@@ -6,6 +6,7 @@ from torch.autograd import Variable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils import parse_splits_filename
 from summarizer.models.vasnet import VASNetModel
+from summarizer.models.transformer import TransformerModel
 from summarizer.models.DSN import DSNModel
 from summarizer.models.baseline import LogisticRegressionModel
 from summarizer.models.sumgan import SumGANModel
@@ -66,6 +67,7 @@ class HParameters:
             self.model_class = {
                 "baseline": LogisticRegressionModel,
                 "vasnet": VASNetModel,
+                "transformer": TransformerModel,
                 "DSN": DSNModel,
                 "sumgan": SumGANModel
             }.get(args["model"], LogisticRegressionModel)

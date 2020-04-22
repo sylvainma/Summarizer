@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 import datetime
 import torch
 from torch.autograd import Variable
@@ -121,6 +122,17 @@ class HParameters:
         else:
             # Create log path if does not exist
             os.makedirs(self.log_path, exist_ok=True)
+
+        # Logger
+        self.logger = logging.getLogger("summarizer")
+        fmt = logging.Formatter("%(asctime)s::%(levelname)s: %(message)s", "%H:%M:%S")
+        ch = logging.StreamHandler()
+        fh = logging.FileHandler(os.path.join(self.log_path, "train.log"))
+        ch.setFormatter(fmt)
+        fh.setFormatter(fmt)
+        self.logger.addHandler(ch)
+        self.logger.addHandler(fh)
+        self.logger.setLevel(logging.INFO) # TODO: what default level to use? +add flag to set it
 
     def get_dataset_by_name(self, dataset_name):
         for d in self.datasets:

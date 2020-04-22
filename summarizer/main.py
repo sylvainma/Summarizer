@@ -10,7 +10,7 @@ def train(hps):
     """Training"""
     # For every split file
     for splits_file in hps.splits_files:
-        print("Start training on {}".format(splits_file))
+        hps.logger.info("Start training on {}".format(splits_file))
         n_folds = len(hps.splits_of_file[splits_file])
         fscores_cv = []
         
@@ -31,12 +31,12 @@ def train(hps):
                 model.save_best_weights(weights_path)
 
             # Report F-score of current fold
-            print("File: {}   Fold: {}/{}   Fold best F-score: {:0.5f}".format(
+            hps.logger.info("File: {}   Fold: {}/{}   Fold best F-score: {:0.5f}".format(
                 splits_file, fold+1, n_folds, fold_best_fscore))
 
         # Report cross-validation F-score of current split file and location of best weights
-        print("File: {0:}   Cross-validation F-score: {1:0.5f}".format(splits_file, np.mean(fscores_cv)))
-        print("File: {0:}   Best weights: {1:}".format(splits_file, weights_path))
+        hps.logger.info("File: {0:}   Cross-validation F-score: {1:0.5f}".format(splits_file, np.mean(fscores_cv)))
+        hps.logger.info("File: {0:}   Best weights: {1:}".format(splits_file, weights_path))
 
         # Log it for Tensorboard
         hparam_dict = hps.get_full_hps_dict()
@@ -48,14 +48,14 @@ def train(hps):
         # Predict on all videos of the dataset using the best weights
         model.reset().load_weights(weights_path)
         model.predict_dataset(pred_path)
-        print("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
+        hps.logger.info("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
 
 
 def test(hps):
     """Evaluation on test keys"""
     # For every split file
     for splits_file in hps.splits_files:
-        print("Start testing on {}".format(splits_file))
+        hps.logger.info("Start testing on {}".format(splits_file))
         n_folds = len(hps.splits_of_file[splits_file])
         fscore_avg = 0.0
 
@@ -67,17 +67,17 @@ def test(hps):
             fscore_avg += fscore
 
             # Report F-score of current fold
-            print("File: {}   Fold: {}/{}   F-score: {:0.5f}".format(
+            hps.logger.info("File: {}   Fold: {}/{}   F-score: {:0.5f}".format(
                 splits_file, fold+1, n_folds, fscore))
 
         # Report cross-validation F-score of current split file
         fscore_avg /= n_folds
-        print("File: {0:}   Average F-score: {1:0.5f}".format(splits_file, fscore_avg))
+        hps.logger.info("File: {0:}   Average F-score: {1:0.5f}".format(splits_file, fscore_avg))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("CS7643 Spring 2020 Project : Video Summarization")
-    parser.add_argument('-v', '--verbose', action='store_true', help="Prints out more messages")
+    parser.add_argument('-v', '--verbose', action='store_true', help="hps.logger.infos out more messages")
     parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
     parser.add_argument('-d', '--datasets', type=str, help="Path to a comma separated list of h5 datasets")
     parser.add_argument('-s', '--splits-files', type=str, help="Comma separated list of split files")

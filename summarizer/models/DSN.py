@@ -52,8 +52,6 @@ class DSNModel(Model):
         return model
 
     def train(self, fold):
-        
-        print("==> Start training")
         start_time = time.time()
        
         self.model.train()
@@ -108,8 +106,8 @@ class DSNModel(Model):
                 reward_writers[key].append(np.mean(epis_rewards))
 
             epoch_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
-            print("epoch {}/{}\t reward {}\t".format(epoch+1, self.hps.epochs_max, epoch_reward))
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_reward, epoch)
+            self.log.info("epoch {}/{}\t reward {}\t".format(epoch+1, self.hps.epochs_max, epoch_reward))
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:

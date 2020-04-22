@@ -11,14 +11,6 @@ def train(hps):
     # For every split file
     for splits_file in hps.splits_files:
         print("Start training on {}".format(splits_file))
-
-        hps.current_dataset = splits_file
-        # Cosmetic for Tensorboard
-        if "splits/" in hps.current_dataset:
-            hps.current_dataset = hps.current_dataset.split("splits/")[1]
-        if "_splits" in hps.current_dataset:
-            hps.current_dataset = hps.current_dataset.split("_splits")[0]
-
         n_folds = len(hps.splits_of_file[splits_file])
         fscores_cv = []
         
@@ -48,6 +40,7 @@ def train(hps):
 
         # Log it for Tensorboard
         hparam_dict = hps.get_full_hps_dict()
+        hparam_dict["dataset"] = hps.dataset_name_of_file[splits_file]
         metric_dict = {'F-score/Fold_{}'.format(f+1): score for f, score in enumerate(fscores_cv)}
         metric_dict["F-score/CV_Average"] = np.mean(fscores_cv)
         hps.writer.add_hparams(hparam_dict, metric_dict)

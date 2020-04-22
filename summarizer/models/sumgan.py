@@ -436,17 +436,17 @@ class SumGANModel(Model):
             train_avg_D_x_hat = np.mean(train_avg_D_x_hat)
             print("   Lse: {:.05f}   Ld: {:.05f}   Lc: {:.05f}   D(x): {:.05f}   D(x_hat): {:.05f}".format(
               train_avg_loss_s_e, train_avg_loss_d, train_avg_loss_c, train_avg_D_x, train_avg_D_x_hat, end=""))
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lse'.format(self.hps.current_dataset, fold+1), train_avg_loss_s_e, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Ld'.format(self.hps.current_dataset, fold+1), train_avg_loss_d, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lc'.format(self.hps.current_dataset, fold+1), train_avg_loss_c, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x'.format(self.hps.current_dataset, fold+1), train_avg_D_x, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat'.format(self.hps.current_dataset, fold+1), train_avg_D_x_hat, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lse'.format(self.dataset_name, fold+1), train_avg_loss_s_e, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Ld'.format(self.dataset_name, fold+1), train_avg_loss_d, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lc'.format(self.dataset_name, fold+1), train_avg_loss_c, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x'.format(self.dataset_name, fold+1), train_avg_D_x, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat'.format(self.dataset_name, fold+1), train_avg_D_x_hat, epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
                 f_score = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.hps.current_dataset, fold+1), f_score, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
                 if f_score > best_f_score:
                     best_f_score = f_score
                     self.best_weights = self.model.state_dict()

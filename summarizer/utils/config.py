@@ -37,9 +37,6 @@ class HParameters:
         self.datasets = ['datasets/summarizer_dataset_summe_google_pool5.h5',
                         'datasets/summarizer_dataset_tvsum_google_pool5.h5']
 
-        # Cosmetic for Tensorboard
-        self.current_dataset = None
-
         # Split files to be trained/tested on
         self.splits_files = [
             'splits/tvsum_splits.json',
@@ -95,14 +92,14 @@ class HParameters:
             self.use_cuda = False
 
         # List of splits by filename
+        self.dataset_name_of_file = {}
         self.dataset_of_file = {}
         self.splits_of_file = {}
-        self.metric_of_file = {}
         for splits_file in self.splits_files:
             dataset_name, splits = parse_splits_filename(splits_file)
+            self.dataset_name_of_file[splits_file] = dataset_name
             self.dataset_of_file[splits_file] = self.get_dataset_by_name(dataset_name).pop()
             self.splits_of_file[splits_file] = splits
-            self.metric_of_file[splits_file] = dataset_name
 
         # Destination for weights and predictions on dataset
         self.weights_path = {}
@@ -148,7 +145,7 @@ class HParameters:
 
     def get_full_hps_dict(self):
         """Returns the list of hyperparameters as a flat dict"""
-        vars = ["current_dataset", "l2_req", "lr", "epochs_max"]
+        vars = ["l2_req", "lr", "epochs_max"]
 
         hps = {}
         for i, var in enumerate(vars):
@@ -157,7 +154,6 @@ class HParameters:
                 val = val.data.cpu().numpy().tolist()[0]
             hps[var] = val
 
-        print(hps)
         return hps
 
 if __name__ == "__main__":

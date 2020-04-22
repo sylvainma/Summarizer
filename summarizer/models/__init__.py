@@ -10,6 +10,7 @@ class Model:
     """Abstract class handling the training process"""
     def __init__(self, hps, splits_file):
         self.hps = hps
+        self.log = hps.logger
         self.splits_file = splits_file
         self.dataset = h5py.File(hps.dataset_of_file[splits_file], "r")
         self.dataset_name = hps.dataset_name_of_file[splits_file]

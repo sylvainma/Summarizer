@@ -110,7 +110,7 @@ class TransformerModel(Model):
 
         cuda_device = self.hps.cuda_device
         if self.hps.use_cuda:
-            print("Setting CUDA device: ", cuda_device)
+            self.log.info(f"Setting CUDA device: {cuda_device}")
             torch.cuda.set_device(cuda_device)
         if self.hps.use_cuda:
             model.cuda()
@@ -132,8 +132,6 @@ class TransformerModel(Model):
 
         # For each epoch
         for epoch in range(self.hps.epochs_max):
-
-            print("Epoch: {0:6}".format(str(epoch+1)+"/"+str(self.hps.epochs_max)), end='')
             train_avg_loss = []
             random.shuffle(train_keys)
 
@@ -162,7 +160,8 @@ class TransformerModel(Model):
 
             # Average training loss value of epoch
             train_avg_loss = np.mean(np.array(train_avg_loss))
-            print("   Train loss: {0:.05f}".format(train_avg_loss, end=''))
+            self.log.info("Epoch: {0:6}    Train loss: {1:.05f}".format(
+                str(epoch+1)+"/"+str(self.hps.epochs_max), train_avg_loss))
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), train_avg_loss, epoch)
 
             # Evaluate performances on test keys

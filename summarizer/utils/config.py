@@ -1,5 +1,8 @@
 import os
 import sys
+import shutil
+import inspect
+import logging
 import datetime
 import torch
 from torch.autograd import Variable
@@ -16,7 +19,6 @@ from summarizer.models.sumgan import SumGANModel
 class HParameters:
     """Hyperparameters configuration class"""
     def __init__(self):
-        self.verbose = False
         self.use_cuda = False
         self.cuda_device = 0
         self.max_summary_length = 0.15
@@ -53,6 +55,9 @@ class HParameters:
 
         # Dict containing extra parameters, possibly model-specific
         self.extra_params = None
+
+        # Logger default level is INFO
+        self.log_level = logging.INFO
 
     def load_from_args(self, args):
         # Any key from flags
@@ -122,6 +127,22 @@ class HParameters:
             # Create log path if does not exist
             os.makedirs(self.log_path, exist_ok=True)
 
+        # Logger
+        self.logger = logging.getLogger("summarizer")
+        fmt = logging.Formatter("%(asctime)s::%(levelname)s: %(message)s", "%H:%M:%S")
+        ch = logging.StreamHandler()
+        fh = logging.FileHandler(os.path.join(self.log_path, "train.log"))
+        ch.setFormatter(fmt)
+        fh.setFormatter(fmt)
+        self.logger.addHandler(ch)
+        self.logger.addHandler(fh)
+        self.logger.setLevel(getattr(logging, self.log_level.upper()))
+
+        # Save model file into log directory
+        src = inspect.getfile(self.model_class)
+        dst = os.path.join(self.log_path, os.path.basename(src))
+        shutil.copyfile(src, dst)
+
     def get_dataset_by_name(self, dataset_name):
         for d in self.datasets:
             if dataset_name in d:
@@ -130,7 +151,7 @@ class HParameters:
 
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
-        vars = ["verbose", "use_cuda", "cuda_device",
+        vars = ["use_cuda", "cuda_device", "log_level",
                 "l2_req", "lr", "epochs_max",
                 "log_path", "splits_files", "extra_params"]
         info_str = ''

@@ -19,7 +19,6 @@ from summarizer.models.sumgan import SumGANModel
 class HParameters:
     """Hyperparameters configuration class"""
     def __init__(self):
-        self.verbose = False
         self.use_cuda = False
         self.cuda_device = 0
         self.max_summary_length = 0.15
@@ -152,7 +151,7 @@ class HParameters:
 
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
-        vars = ["verbose", "use_cuda", "cuda_device", "debug",
+        vars = ["use_cuda", "cuda_device", "debug",
                 "l2_req", "lr", "epochs_max",
                 "log_path", "splits_files", "extra_params"]
         info_str = ''

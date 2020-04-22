@@ -56,8 +56,8 @@ class HParameters:
         # Dict containing extra parameters, possibly model-specific
         self.extra_params = None
 
-        # Logger default level is not DEBUG
-        self.debug = False
+        # Logger default level is INFO
+        self.log_level = logging.INFO
 
     def load_from_args(self, args):
         # Any key from flags
@@ -136,7 +136,7 @@ class HParameters:
         fh.setFormatter(fmt)
         self.logger.addHandler(ch)
         self.logger.addHandler(fh)
-        self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
+        self.logger.setLevel(getattr(logging, self.log_level.upper()))
 
         # Save model file into log directory
         src = inspect.getfile(self.model_class)
@@ -151,7 +151,7 @@ class HParameters:
 
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
-        vars = ["use_cuda", "cuda_device", "debug",
+        vars = ["use_cuda", "cuda_device", "log_level",
                 "l2_req", "lr", "epochs_max",
                 "log_path", "splits_files", "extra_params"]
         info_str = ''

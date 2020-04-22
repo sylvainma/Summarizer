@@ -84,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--epochs-max', type=int, default=300, help="Number of epochs for train mode")
     parser.add_argument('-w', '--weights-path', type=str, help="Weights path")
     parser.add_argument('-t', '--test', action='store_true', help="Test mode")
-    parser.add_argument('-l', '--debug', action='store_true', help="Set logger to debug level")
+    parser.add_argument('-l', '--log-level', choices=['critical', 'error', 'warning', 'info', 'debug'], default='info', help="Set logger to custom level")
     args, unknown_args = parser.parse_known_args()
 
     hps_init = args.__dict__

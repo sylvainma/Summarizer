@@ -160,10 +160,6 @@ class HParameters:
         print(hps)
         return hps
 
-    def __del__(self):
-        # Close the Tensorboard writer
-        self.writer.close()
-
 if __name__ == "__main__":
     # Check default values
     hps = HParameters()

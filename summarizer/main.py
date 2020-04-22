@@ -109,6 +109,3 @@ if __name__ == "__main__":
         test(hps)
     else:
         train(hps)
-
-    # Close the Tensorboard writer
-    hps.writer.close()

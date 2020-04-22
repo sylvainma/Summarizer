@@ -209,11 +209,13 @@ class VASNetModel(Model):
             # Average training loss value of epoch
             train_avg_loss = np.mean(np.array(train_avg_loss))
             print("   Train loss: {0:.05f}".format(train_avg_loss, end=''))
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), train_avg_loss, epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
                 f_score = self.test(fold)
                 self.model.train()
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
                 if f_score > best_f_score:
                     best_f_score = f_score
                     self.best_weights = self.model.state_dict()

@@ -109,11 +109,13 @@ class DSNModel(Model):
 
             epoch_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
             print("epoch {}/{}\t reward {}\t".format(epoch+1, self.hps.epochs_max, epoch_reward))
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_reward, epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
                 f_score = self.test(fold)
                 self.model.train()
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
                 if f_score > best_f_score:
                     best_f_score = f_score
                     self.best_weights = self.model.state_dict()

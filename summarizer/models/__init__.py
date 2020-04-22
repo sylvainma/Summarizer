@@ -12,7 +12,7 @@ class Model:
         self.hps = hps
         self.splits_file = splits_file
         self.dataset = h5py.File(hps.dataset_of_file[splits_file], "r")
-        self.metric = hps.metric_of_file[splits_file]
+        self.dataset_name = hps.dataset_name_of_file[splits_file]
         
     def reset(self):
         """Reset between two folds of the cross-validation"""
@@ -88,7 +88,7 @@ class Model:
         self.model.load_state_dict(torch.load(weights_path))
 
     def _eval_summary(self, machine_summary_activations, test_keys):
-        eval_metric = 'avg' if self.metric == 'tvsum' else 'max'
+        eval_metric = 'avg' if self.dataset_name == 'tvsum' else 'max'
 
         fms = []
         for key in test_keys:

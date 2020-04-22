@@ -3,6 +3,7 @@ import sys
 import datetime
 import torch
 from torch.autograd import Variable
+from torch.utils.tensorboard import SummaryWriter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils import parse_splits_filename
 from summarizer.models.vasnet import VASNetModel
@@ -80,6 +81,7 @@ class HParameters:
         log_dir = str(int(datetime.datetime.now().timestamp()))
         log_dir += "_" + self.model_class.__name__
         self.log_path = os.path.join("logs", log_dir)
+        self.writer = SummaryWriter(self.log_path)
 
         # Handle use_cuda flag
         if self.use_cuda == "default":
@@ -90,14 +92,14 @@ class HParameters:
             self.use_cuda = False
 
         # List of splits by filename
+        self.dataset_name_of_file = {}
         self.dataset_of_file = {}
         self.splits_of_file = {}
-        self.metric_of_file = {}
         for splits_file in self.splits_files:
             dataset_name, splits = parse_splits_filename(splits_file)
+            self.dataset_name_of_file[splits_file] = dataset_name
             self.dataset_of_file[splits_file] = self.get_dataset_by_name(dataset_name).pop()
             self.splits_of_file[splits_file] = splits
-            self.metric_of_file[splits_file] = dataset_name
 
         # Destination for weights and predictions on dataset
         self.weights_path = {}
@@ -140,6 +142,19 @@ class HParameters:
             info_str += "\n" if i < len(vars)-1 else ""
 
         return info_str
+
+    def get_full_hps_dict(self):
+        """Returns the list of hyperparameters as a flat dict"""
+        vars = ["l2_req", "lr", "epochs_max"]
+
+        hps = {}
+        for i, var in enumerate(vars):
+            val = getattr(self, var)
+            if isinstance(val, Variable):
+                val = val.data.cpu().numpy().tolist()[0]
+            hps[var] = val
+
+        return hps
 
 if __name__ == "__main__":
     # Check default values

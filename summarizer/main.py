@@ -1,6 +1,7 @@
 import os
 import argparse
 import sys
+import numpy as np
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils.config import HParameters
 
@@ -11,7 +12,7 @@ def train(hps):
     for splits_file in hps.splits_files:
         print("Start training on {}".format(splits_file))
         n_folds = len(hps.splits_of_file[splits_file])
-        fscore_cv = 0.0
+        fscores_cv = []
         
         # Destination for weights and predictions on dataset
         weights_path = hps.weights_path[splits_file]
@@ -22,7 +23,7 @@ def train(hps):
         model = hps.model_class(hps, splits_file)
         for fold in range(n_folds):
             fold_best_fscore = model.reset().train(fold)
-            fscore_cv += fold_best_fscore
+            fscores_cv.append(fold_best_fscore)
             
             # Save weights if it is the current maximum F-score
             if fold_best_fscore > fscore_max:
@@ -34,9 +35,15 @@ def train(hps):
                 splits_file, fold+1, n_folds, fold_best_fscore))
 
         # Report cross-validation F-score of current split file and location of best weights
-        fscore_cv /= n_folds
-        print("File: {0:}   Cross-validation F-score: {1:0.5f}".format(splits_file, fscore_cv))
+        print("File: {0:}   Cross-validation F-score: {1:0.5f}".format(splits_file, np.mean(fscores_cv)))
         print("File: {0:}   Best weights: {1:}".format(splits_file, weights_path))
+
+        # Log it for Tensorboard
+        hparam_dict = hps.get_full_hps_dict()
+        hparam_dict["dataset"] = hps.dataset_name_of_file[splits_file]
+        metric_dict = {'F-score/Fold_{}'.format(f+1): score for f, score in enumerate(fscores_cv)}
+        metric_dict["F-score/CV_Average"] = np.mean(fscores_cv)
+        hps.writer.add_hparams(hparam_dict, metric_dict)
 
         # Predict on all videos of the dataset using the best weights
         model.reset().load_weights(weights_path)
@@ -95,3 +102,6 @@ if __name__ == "__main__":
         test(hps)
     else:
         train(hps)
+
+    # Close the Tensorboard writer
+    hps.writer.close()

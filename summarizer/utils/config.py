@@ -1,5 +1,7 @@
 import os
 import sys
+import shutil
+import inspect
 import logging
 import datetime
 import torch
@@ -133,6 +135,11 @@ class HParameters:
         self.logger.addHandler(ch)
         self.logger.addHandler(fh)
         self.logger.setLevel(logging.INFO) # TODO: what default level to use? +add flag to set it
+
+        # Save model file into log directory
+        src = inspect.getfile(self.model_class)
+        dst = os.path.join(self.log_path, os.path.basename(src))
+        shutil.copyfile(src, dst)
 
     def get_dataset_by_name(self, dataset_name):
         for d in self.datasets:

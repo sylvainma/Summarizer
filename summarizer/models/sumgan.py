@@ -441,7 +441,7 @@ class SumGANModel(Model):
             self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat'.format(self.dataset_name, fold+1), train_avg_D_x_hat, epoch)
 
             # Evaluate performances on test keys
-            if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
+            if epoch % self.hps.test_every_epochs == 0:
                 f_score = self.test(fold)
                 self.model.train()
                 self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)

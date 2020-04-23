@@ -19,7 +19,6 @@ from summarizer.models import Model
 import vsum_tools
 
 """
-Deep Sumarization Network 
 Deep Reinforcement Learning for Unsupervised Video Summarization with Diversity-Representativeness Reward
 https://arxiv.org/pdf/1801.00054v3.pdf
 https://github.com/KaiyangZhou/pytorch-vsumm-reinforce
@@ -110,7 +109,7 @@ class DSNModel(Model):
             self.log.info("epoch {}/{}\t reward {}\t".format(epoch+1, self.hps.epochs_max, epoch_reward))
 
             # Evaluate performances on test keys
-            if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
+            if epoch % self.hps.test_every_epochs == 0:
                 f_score = self.test(fold)
                 self.model.train()
                 self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)

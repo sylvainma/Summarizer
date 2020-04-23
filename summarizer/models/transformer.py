@@ -165,7 +165,7 @@ class TransformerModel(Model):
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), train_avg_loss, epoch)
 
             # Evaluate performances on test keys
-            if epoch % self.hps.test_every_epochs == 0 or epoch == 0:
+            if epoch % self.hps.test_every_epochs == 0:
                 f_score = self.test(fold)
                 self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
                 self.model.train()

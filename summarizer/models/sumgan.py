@@ -256,7 +256,6 @@ class SumGAN(nn.Module):
 class SumGANModel(Model):
     def _init_model(self):
         # SumGAN hyperparameters
-        self.clip = float(self.hps.extra_params.get("clip", 5.0))
         self.sigma = float(self.hps.extra_params.get("sigma", 0.3))
         self.input_size = int(self.hps.extra_params.get("input_size", 1024))
         self.sLSTM_hidden_size = int(self.hps.extra_params.get("sLSTM_hidden_size", 1024))
@@ -373,7 +372,7 @@ class SumGANModel(Model):
 
                 # Update
                 loss_s_e.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
                 self.s_e_optimizer.step()
                 self.s_e_optimizer.zero_grad()
 
@@ -394,7 +393,7 @@ class SumGANModel(Model):
 
                 # Update
                 loss_d.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
                 self.d_optimizer.step()
                 self.d_optimizer.zero_grad()
 
@@ -413,7 +412,7 @@ class SumGANModel(Model):
 
                 # Update
                 loss_c.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
                 self.c_optimizer.step()
                 self.c_optimizer.zero_grad()
 

@@ -1,30 +1,18 @@
 import os
 import sys
-import time
-import datetime
 import random
 import numpy as np
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.backends.cudnn as cudnn
-from torch.optim import lr_scheduler
 from torch.distributions import Bernoulli
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
-#from __future__ import print_function
-
-import vsum_tools
 
 """
 Deep Reinforcement Learning for Unsupervised Video Summarization with Diversity-Representativeness Reward
 https://arxiv.org/pdf/1801.00054v3.pdf
 https://github.com/KaiyangZhou/pytorch-vsumm-reinforce
 """
-
-__all__ = ['DSN']
 
 class DSN(nn.Module):
     """Deep Summarization Network"""
@@ -35,78 +23,111 @@ class DSN(nn.Module):
             self.rnn = nn.LSTM(in_dim, hid_dim, num_layers=num_layers, bidirectional=True, batch_first=True)
         else:
             self.rnn = nn.GRU(in_dim, hid_dim, num_layers=num_layers, bidirectional=True, batch_first=True)
-        self.fc = nn.Linear(hid_dim*2, 1)
+        self.out = nn.Sequential(
+            nn.Linear(hid_dim * 2, 1),
+            nn.Sigmoid())
 
     def forward(self, x):
         h, _ = self.rnn(x)
-        p = F.sigmoid(self.fc(h))
-        return p
+        probs = self.out(h)
+        return probs
 
 
 class DSNModel(Model):
     def _init_model(self):
+        self.beta = int(self.hps.extra_params.get("beta", 0.01))
+        self.num_episodes = int(self.hps.extra_params.get("num_episodes", 5))
+        self.eps = float(self.hps.extra_params.get("eps", 0.5))
+        self.ignore_far_sim = bool(self.hps.extra_params.get("ignore_far_sim", True))
+        self.temp_dist_thre = int(self.hps.extra_params.get("temp_dist_thre", 20))
         model = DSN()
-        self.beta = 0.01
-        self.num_episode = 5
         return model
 
     def train(self, fold):
-        start_time = time.time()
-       
         self.model.train()
-        
         train_keys, _ = self._get_train_test_keys(fold)
-        baselines = {key: 0. for key in train_keys} # baseline rewards for videos
-        reward_writers = {key: [] for key in train_keys} # record reward changes for each video
 
-        criterion = nn.MSELoss()
-        if self.hps.use_cuda:
-            criterion = criterion.cuda()
-
+        # Model parameters
+        self.log.debug("Parameters: {}".format(sum([_.numel() for _ in self.model.parameters()])))
+        
+        # Optimizer
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req
-        )
+            weight_decay=self.hps.l2_req)
+
+        # Baseline rewards for videos
+        baselines = {key: 0. for key in train_keys} 
+
+        # Record reward changes for each video across epochs
+        reward_writers = {key: [] for key in train_keys}
 
         # To record performances of the best epoch
         best_f_score = 0.0
         
         # For each epoch
         for epoch in range(self.hps.epochs_max):
-            idxs = np.arange(len(train_keys))
-            np.random.shuffle(idxs) # shuffle indices
+            epoch_avg_loss = []
+            random.shuffle(train_keys)
 
-            for idx in idxs:
-                key = train_keys[idx]
+            # For each training video
+            for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
-                seq = dataset['features'][...] # sequence of features, (seq_len, dim)
-                seq = torch.from_numpy(seq).unsqueeze(0) # input shape (1, seq_len, dim)
+                seq = dataset['features'][...]
+                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, dim)
                 if self.hps.use_cuda: 
                     seq = seq.cuda()
-                probs = self.model(seq) # output shape (1, seq_len, 1)
+                
+                # Score probabilities from the RNN
+                probs = self.model(seq)
+                dist = Bernoulli(probs)
 
-                cost = self.beta * (probs.mean() - 0.5)**2 # minimize summary length penalty term [Eq.11]
-                m = Bernoulli(probs)
+                # Regularization: summary length penalty term [Eq.11]
+                loss = self.beta * (probs.mean() - self.eps) ** 2
+                
+                # Run episodes
                 epis_rewards = []
-                for _ in range(self.num_episode):
-                    actions = m.sample()
-                    log_probs = m.log_prob(actions)
-                    reward = compute_reward(seq, actions, use_gpu=self.hps.use_cuda)
-                    expected_reward = log_probs.mean() * (reward - baselines[key])
-                    cost -= expected_reward # minimize negative expected reward
+                for _ in range(self.num_episodes):
+                    # Sample actions using the distribution
+                    actions = dist.sample()
+                    log_probs = dist.log_prob(actions)
+
+                    # Compute reward of current episode
+                    reward = self.compute_reward(seq, actions, 
+                        ignore_far_sim=self.ignore_far_sim,
+                        temp_dist_thre=self.temp_dist_thre)
+                    
+                    # Negative policy gradient [Eq.10] of current episode
+                    loss -= log_probs.mean() * (reward - baselines[key])
+
+                    # Record rewards over the episodes
                     epis_rewards.append(reward.item())
 
+                # Average the loss over the episodes
+                loss /= float(self.num_episodes)
+
+                # Update model's parameters
                 self.optimizer.zero_grad()
-                cost.backward()
+                loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
                 self.optimizer.step()
-                baselines[key] = 0.9 * baselines[key] + 0.1 * np.mean(epis_rewards) # update baseline reward via moving average
+
+                # Update baseline reward via moving average
+                baselines[key] = 0.9 * baselines[key] + 0.1 * np.mean(epis_rewards) 
+                
+                # Record average reward of the current video of the current epoch
                 reward_writers[key].append(np.mean(epis_rewards))
 
-            epoch_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_reward, epoch)
-            self.log.info("epoch {}/{}\t reward {}\t".format(epoch+1, self.hps.epochs_max, epoch_reward))
+                # Record loss
+                epoch_avg_loss.append(float(loss)) 
+
+            # Log average reward and loss by the end of the epoch
+            epoch_avg_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
+            epoch_avg_loss = np.mean(epoch_avg_loss)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_avg_reward, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), epoch_avg_loss, epoch)
+            self.log.info("Epoch: {:6}   Reward: {:.05f}   Loss: {:.05f}".format(
+                str(epoch+1)+"/"+str(self.hps.epochs_max), epoch_avg_reward, epoch_avg_loss))
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
@@ -137,60 +158,58 @@ class DSNModel(Model):
         f_score = self._eval_summary(summary, test_keys)
         return f_score
     
-def compute_reward(seq, actions, ignore_far_sim=True, temp_dist_thre=20, use_gpu=False):
-    """
-    Compute diversity reward and representativeness reward
+    def compute_reward(self, seq, actions, ignore_far_sim=True, temp_dist_thre=20):
+        """Compute diversity reward and representativeness reward
+        Args:
+            seq: sequence of features, shape (seq_len, 1, dim)
+            actions: binary action sequence, shape (seq_len, 1, 1)
+            ignore_far_sim (bool): whether to ignore temporally distant similarity (default: True)
+            temp_dist_thre (int): threshold for ignoring temporally distant similarity (default: 20)
+        """
+        _seq = seq.detach()
+        _actions = actions.detach()
+        pick_idxs = _actions.squeeze().nonzero().squeeze()
+        num_picks = len(pick_idxs) if pick_idxs.ndimension() > 0 else 1
+        
+        # Give zero reward if no frames are selected
+        if num_picks == 0:
+            reward = torch.tensor(0.)
+            if self.hps.use_cuda:
+                reward = reward.cuda()
+            return reward
 
-    Args:
-        seq: sequence of features, shape (1, seq_len, dim)
-        actions: binary action sequence, shape (1, seq_len, 1)
-        ignore_far_sim (bool): whether to ignore temporally distant similarity (default: True)
-        temp_dist_thre (int): threshold for ignoring temporally distant similarity (default: 20)
-        use_gpu (bool): whether to use GPU
-    """
-    _seq = seq.detach()
-    _actions = actions.detach()
-    pick_idxs = _actions.squeeze().nonzero().squeeze()
-    num_picks = len(pick_idxs) if pick_idxs.ndimension() > 0 else 1
-    
-    if num_picks == 0:
-        # give zero reward is no frames are selected
-        reward = torch.tensor(0.)
-        if use_gpu: reward = reward.cuda()
+        _seq = _seq.squeeze()
+        T = _seq.size(0)
+
+        # Compute diversity reward [Eq.3]
+        if num_picks == 1:
+            reward_div = torch.tensor(0.)
+            if self.hps.use_cuda:
+                reward_div = reward_div.cuda()
+        else:
+            # Dissimilarity function (cosine dissimilarity) [Eq.4]
+            normed_seq = _seq / _seq.norm(p=2, dim=1, keepdim=True)
+            dissim_mat = 1. - torch.matmul(normed_seq, normed_seq.t())
+            dissim_submat = dissim_mat[pick_idxs,:][:,pick_idxs]
+            if ignore_far_sim:
+                # Ignore temporally distant similarity
+                pick_mat = pick_idxs.expand(num_picks, num_picks)
+                temp_dist_mat = torch.abs(pick_mat - pick_mat.t())
+                dissim_submat[temp_dist_mat > temp_dist_thre] = 1.
+            reward_div = dissim_submat.sum() / (num_picks * (num_picks - 1.))
+
+        # Compute representativeness reward [Eq.5]
+        dist_mat = torch.pow(_seq, 2).sum(dim=1, keepdim=True).expand(T, T) # (T, T)
+        dist_mat = dist_mat + dist_mat.t()
+        dist_mat.addmm_(1, -2, _seq, _seq.t())
+        dist_mat = dist_mat[:,pick_idxs]
+        dist_mat = dist_mat.min(1, keepdim=True)[0]
+        reward_rep = torch.exp(-dist_mat.mean())
+
+        # Combine the two rewards
+        reward = (reward_div + reward_rep) * 0.5
+
         return reward
-
-    _seq = _seq.squeeze()
-    n = _seq.size(0)
-
-    # compute diversity reward
-    if num_picks == 1:
-        reward_div = torch.tensor(0.)
-        if use_gpu: reward_div = reward_div.cuda()
-    else:
-        normed_seq = _seq / _seq.norm(p=2, dim=1, keepdim=True)
-        dissim_mat = 1. - torch.matmul(normed_seq, normed_seq.t()) # dissimilarity matrix [Eq.4]
-        dissim_submat = dissim_mat[pick_idxs,:][:,pick_idxs]
-        if ignore_far_sim:
-            # ignore temporally distant similarity
-            pick_mat = pick_idxs.expand(num_picks, num_picks)
-            temp_dist_mat = torch.abs(pick_mat - pick_mat.t())
-            dissim_submat[temp_dist_mat > temp_dist_thre] = 1.
-        reward_div = dissim_submat.sum() / (num_picks * (num_picks - 1.)) # diversity reward [Eq.3]
-
-    # compute representativeness reward
-    dist_mat = torch.pow(_seq, 2).sum(dim=1, keepdim=True).expand(n, n)
-    dist_mat = dist_mat + dist_mat.t()
-    dist_mat.addmm_(1, -2, _seq, _seq.t())
-    dist_mat = dist_mat[:,pick_idxs]
-    dist_mat = dist_mat.min(1, keepdim=True)[0]
-    #reward_rep = torch.exp(torch.FloatTensor([-dist_mat.mean()]))[0] # representativeness reward [Eq.5]
-    reward_rep = torch.exp(-dist_mat.mean())
-
-    # combine the two rewards
-    reward = (reward_div + reward_rep) * 0.5
-
-    return reward
-
 
 
 if __name__ == "__main__":

@@ -40,6 +40,7 @@ class DSNModel(Model):
         self.eps = float(self.hps.extra_params.get("eps", 0.5))
         self.ignore_far_sim = bool(self.hps.extra_params.get("ignore_far_sim", True))
         self.temp_dist_thre = int(self.hps.extra_params.get("temp_dist_thre", 20))
+        self.sup = bool(self.hps.extra_params.get("sup", False))
         model = DSN()
         return model
 
@@ -55,6 +56,11 @@ class DSNModel(Model):
             self.model.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
+        
+        # BCE loss for supervised extension
+        loss_BCE = nn.BCELoss()
+        if self.hps.use_cuda:
+            loss_BCE.cuda()
 
         # Baseline rewards for videos
         baselines = {key: 0. for key in train_keys} 
@@ -75,8 +81,15 @@ class DSNModel(Model):
                 dataset = self.dataset[key]
                 seq = dataset['features'][...]
                 seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, dim)
+                y = dataset["gtscore"][...]
+                y = torch.from_numpy(y).view(-1, 1, 1) # (seq_len, 1, 1)
+
+                # Normalize frame scores
+                y -= y.min()
+                y /= y.max()
+
                 if self.hps.use_cuda: 
-                    seq = seq.cuda()
+                    seq, y = seq.cuda(), y.float().cuda()
                 
                 # Score probabilities from the RNN
                 probs = self.model(seq)
@@ -84,6 +97,10 @@ class DSNModel(Model):
 
                 # Regularization: summary length penalty term [Eq.11]
                 loss = self.beta * (probs.mean() - self.eps) ** 2
+
+                # Extension to supervised learning (neg-MLE <=> BCE)
+                if self.sup:
+                    loss += loss_BCE(probs, y)
                 
                 # Run episodes
                 epis_rewards = []

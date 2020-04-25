@@ -64,7 +64,7 @@ class HParameters:
             val = args[key]
             if val is not None:
                 if hasattr(self, key) and isinstance(getattr(self, key), list):
-                    val = val.split()
+                    val = val.split(",")
                 setattr(self, key, val)
 
         # Pick model

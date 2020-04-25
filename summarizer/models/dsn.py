@@ -89,7 +89,7 @@ class DSNModel(Model):
                 y /= y.max()
 
                 if self.hps.use_cuda: 
-                    seq, y = seq.cuda(), y.float().cuda()
+                    seq, y = seq.cuda(), y.cuda()
                 
                 # Score probabilities from the RNN
                 probs = self.model(seq)
@@ -167,7 +167,7 @@ class DSNModel(Model):
                 seq = torch.from_numpy(seq).unsqueeze(0)
 
                 if self.hps.use_cuda:
-                    seq = seq.float().cuda()
+                    seq = seq.cuda()
 
                 y = self.model(seq)
                 summary[key] = y[0].detach().cpu().numpy()

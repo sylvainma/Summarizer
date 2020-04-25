@@ -69,7 +69,7 @@ class DSNModel(Model):
         reward_writers = {key: [] for key in train_keys}
 
         # To record performances of the best epoch
-        best_f_score = 0.0
+        best_corr, best_f_score = 0.0, 0.0
         
         # For each epoch
         for epoch in range(self.hps.epochs_max):
@@ -148,14 +148,17 @@ class DSNModel(Model):
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
-                f_score = self.test(fold)
+                corr, f_score = self.test(fold)
                 self.model.train()
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), corr, epoch)
                 self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
                 if f_score > best_f_score:
                     best_f_score = f_score
+                if corr > best_corr:
+                    best_corr = corr
                     self.best_weights = self.model.state_dict()
 
-        return best_f_score
+        return best_corr, best_f_score
 
     def test(self, fold):
         self.model.eval()
@@ -172,8 +175,9 @@ class DSNModel(Model):
                 y = self.model(seq)
                 summary[key] = y[0].detach().cpu().numpy()
 
+        corr = self._eval_scores(summary, test_keys)
         f_score = self._eval_summary(summary, test_keys)
-        return f_score
+        return corr, f_score
     
     def compute_reward(self, seq, actions, far_sim=False, temp_dist_thre=20):
         """Compute diversity reward and representativeness reward

@@ -9,6 +9,7 @@ from summarizer.utils.config import HParameters
 def train(hps):
     """Training"""
     # For every split file
+    results = []
     for splits_file in hps.splits_files:
         hps.logger.info("Start training on {}".format(splits_file))
         n_folds = len(hps.splits_of_file[splits_file])
@@ -54,6 +55,11 @@ def train(hps):
         model.reset().load_weights(weights_path)
         model.predict_dataset(pred_path)
         hps.logger.info("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
+
+        # Save results of current splits file
+        results.append((splits_file, np.mean(corrs_cv), np.mean(fscores_cv)))
+    
+    return results
 
 
 def test(hps):

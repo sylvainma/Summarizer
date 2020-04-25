@@ -156,24 +156,6 @@ class DSNModel(Model):
                     self.best_weights = self.model.state_dict()
 
         return best_f_score
-
-    def test(self, fold):
-        self.model.eval()
-        _, test_keys = self._get_train_test_keys(fold)
-        summary = {}
-        with torch.no_grad():
-            for key in test_keys:
-                seq = self.dataset[key]['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
-
-                if self.hps.use_cuda:
-                    seq = seq.cuda()
-
-                y = self.model(seq)
-                summary[key] = y[0].detach().cpu().numpy()
-
-        f_score = self._eval_summary(summary, test_keys)
-        return f_score
     
     def compute_reward(self, seq, actions, far_sim=False, temp_dist_thre=20):
         """Compute diversity reward and representativeness reward

@@ -454,24 +454,6 @@ class SumGANModel(Model):
 
         return best_f_score
 
-    def test(self, fold):
-        self.model.eval()
-        _, test_keys = self._get_train_test_keys(fold)
-        summary = {}
-        with torch.no_grad():
-            for key in test_keys:
-                x = self.dataset[key]["features"][...]
-                x = torch.from_numpy(x).unsqueeze(0)
-
-                if self.hps.use_cuda:
-                    x = x.cuda()
-
-                _, _, scores = self.model.summarizer(x)
-                summary[key] = scores[0].detach().cpu().numpy()
-
-        f_score = self._eval_summary(summary, test_keys)
-        return f_score
-
 
 if __name__ == "__main__":
     model = SumGAN()

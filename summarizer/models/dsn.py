@@ -38,7 +38,7 @@ class DSNModel(Model):
         self.beta = int(self.hps.extra_params.get("beta", 0.01))
         self.num_episodes = int(self.hps.extra_params.get("num_episodes", 5))
         self.eps = float(self.hps.extra_params.get("eps", 0.5))
-        self.ignore_far_sim = bool(self.hps.extra_params.get("ignore_far_sim", True))
+        self.far_sim = bool(self.hps.extra_params.get("far_sim", False))
         self.temp_dist_thre = int(self.hps.extra_params.get("temp_dist_thre", 20))
         self.sup = bool(self.hps.extra_params.get("sup", False))
         model = DSN()
@@ -175,12 +175,12 @@ class DSNModel(Model):
         f_score = self._eval_summary(summary, test_keys)
         return f_score
     
-    def compute_reward(self, seq, actions, ignore_far_sim=True, temp_dist_thre=20):
+    def compute_reward(self, seq, actions, far_sim=False, temp_dist_thre=20):
         """Compute diversity reward and representativeness reward
         Args:
             seq: sequence of features, shape (seq_len, 1, dim)
             actions: binary action sequence, shape (seq_len, 1, 1)
-            ignore_far_sim (bool): whether to ignore temporally distant similarity (default: True)
+            far_sim (bool): whether to use temporally distant similarity (default: False)
             temp_dist_thre (int): threshold for ignoring temporally distant similarity (default: 20)
         """
         _seq = seq.detach()
@@ -208,7 +208,7 @@ class DSNModel(Model):
             normed_seq = _seq / _seq.norm(p=2, dim=1, keepdim=True)
             dissim_mat = 1. - torch.matmul(normed_seq, normed_seq.t())
             dissim_submat = dissim_mat[pick_idxs,:][:,pick_idxs]
-            if ignore_far_sim:
+            if not far_sim:
                 # Ignore temporally distant similarity
                 pick_mat = pick_idxs.expand(num_picks, num_picks)
                 temp_dist_mat = torch.abs(pick_mat - pick_mat.t())

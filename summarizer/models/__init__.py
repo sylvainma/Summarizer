@@ -90,7 +90,6 @@ class Model:
     
     def _eval_scores(self, machine_summary_activations, test_keys):
         """Evaluate the importances scores using ranking correlation"""
-        agg = "avg" if self.dataset_name == "tvsum" else "max"
 
         corrs = []
         for key in test_keys:
@@ -105,7 +104,7 @@ class Model:
             positions = d["picks"][...]
 
             machine_scores = generate_scores(probs, n_frames, positions)
-            corr = evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg=agg)
+            corr = evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg=self.hps.agg)
             corrs.append(corr)
         
         corr = np.mean(corrs)
@@ -113,7 +112,6 @@ class Model:
 
     def _eval_summary(self, machine_summary_activations, test_keys):
         """Evaluate the final summary using the F-score"""
-        agg = "avg" if self.dataset_name == "tvsum" else "max"
 
         f_scores = []
         for key in test_keys:
@@ -130,7 +128,7 @@ class Model:
             user_summary = d["user_summary"][...]
 
             machine_summary = generate_summary(probs, cps, num_frames, nfps, positions)
-            f_score = evaluate_summary(machine_summary, user_summary, agg=agg)
+            f_score = evaluate_summary(machine_summary, user_summary, agg=self.hps.agg)
             f_scores.append(f_score)
 
         f_score = np.mean(f_scores)

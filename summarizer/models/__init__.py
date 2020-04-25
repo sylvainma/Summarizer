@@ -4,7 +4,7 @@ import numpy as np
 import h5py
 import torch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from summarizer.vsum_tools import generate_summary, evaluate_summary
+from summarizer.vsum_tools import generate_summary, evaluate_summary, generate_scores, evaluate_scores
 
 class Model:
     """Abstract class handling the training process"""
@@ -65,13 +65,13 @@ class Model:
                 d = self.dataset[key]
                 features = d["features"][...]
                 cps = d['change_points'][...]
-                num_frames = d['n_frames'][()]
+                n_frames = d['n_frames'][()]
                 nfps = d['n_frame_per_seg'][...].tolist()
                 positions = d['picks'][...]
                 user_summary = d['user_summary'][...]
                 # Predict scores and compute machine summary
                 scores = self.predict(features)
-                machine_summary = generate_summary(scores, cps, num_frames, nfps, positions)
+                machine_summary = generate_summary(scores, cps, n_frames, nfps, positions)
                 # Save in hdfs5 file
                 k = g.create_group(key)
                 k.create_dataset("scores", data=scores)
@@ -87,27 +87,51 @@ class Model:
     def load_weights(self, weights_path):
         """Load weights"""
         self.model.load_state_dict(torch.load(weights_path))
+    
+    def _eval_scores(self, machine_summary_activations, test_keys):
+        """Evaluate the importances scores using ranking correlation"""
+        agg = "avg" if self.dataset_name == "tvsum" else "max"
 
-    def _eval_summary(self, machine_summary_activations, test_keys):
-        eval_metric = 'avg' if self.dataset_name == 'tvsum' else 'max'
-
-        fms = []
+        corrs = []
         for key in test_keys:
             d = self.dataset[key]
             probs = machine_summary_activations[key]
 
-            if 'change_points' not in d:
-                print("ERROR: No change points in dataset/video ", key)
+            if "user_summary" not in d:
+                self.log.error(f" No user_summary in video {key} for score evaluation")
 
-            cps = d['change_points'][...]
-            num_frames = d['n_frames'][()]
-            nfps = d['n_frame_per_seg'][...].tolist()
-            positions = d['picks'][...]
-            user_summary = d['user_summary'][...]
+            user_scores = d["user_summary"][...] # TODO: pick the right thing here
+            n_frames = d["n_frames"][()]
+            positions = d["picks"][...]
+
+            machine_scores = generate_scores(probs, n_frames, positions)
+            corr = evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg=agg)
+            corrs.append(corr)
+        
+        corr = np.mean(corrs)
+        return corr
+
+    def _eval_summary(self, machine_summary_activations, test_keys):
+        """Evaluate the final summary using the F-score"""
+        agg = "avg" if self.dataset_name == "tvsum" else "max"
+
+        f_scores = []
+        for key in test_keys:
+            d = self.dataset[key]
+            probs = machine_summary_activations[key]
+
+            if "change_points" not in d:
+                self.log.error(f" No change points in dataset/video {key} for summary evaluation")
+
+            cps = d["change_points"][...]
+            num_frames = d["n_frames"][()]
+            nfps = d["n_frame_per_seg"][...].tolist()
+            positions = d["picks"][...]
+            user_summary = d["user_summary"][...]
 
             machine_summary = generate_summary(probs, cps, num_frames, nfps, positions)
-            fm, _, _ = evaluate_summary(machine_summary, user_summary, eval_metric)
-            fms.append(fm)
+            f_score = evaluate_summary(machine_summary, user_summary, agg=agg)
+            f_scores.append(f_score)
 
-        f_score = np.mean(fms)
+        f_score = np.mean(f_scores)
         return f_score

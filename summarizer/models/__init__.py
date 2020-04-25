@@ -45,7 +45,7 @@ class Model:
         """Predict targets given features as input, should return a numpy"""
         seq = torch.from_numpy(features).unsqueeze(0)
         if self.hps.use_cuda:
-            seq = seq.float().cuda()
+            seq = seq.cuda()
         y = self.model(seq)
         y = y[0].detach().cpu().numpy()
         return y

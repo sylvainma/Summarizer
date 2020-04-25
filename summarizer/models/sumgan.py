@@ -351,7 +351,7 @@ class SumGANModel(Model):
                 y /= y.max()
 
                 if self.hps.use_cuda:
-                    x, y = x.float().cuda(), y.float().cuda()
+                    x, y = x.cuda(), y.cuda()
 
                 ###############################
                 # Selector and Encoder update
@@ -464,7 +464,7 @@ class SumGANModel(Model):
                 x = torch.from_numpy(x).unsqueeze(0)
 
                 if self.hps.use_cuda:
-                    x = x.float().cuda()
+                    x = x.cuda()
 
                 _, _, scores = self.model.summarizer(x)
                 summary[key] = scores[0].detach().cpu().numpy()

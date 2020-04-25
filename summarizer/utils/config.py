@@ -74,7 +74,7 @@ class HParameters:
                 "baseline": LogisticRegressionModel,
                 "vasnet": VASNetModel,
                 "transformer": TransformerModel,
-                "DSN": DSNModel,
+                "dsn": DSNModel,
                 "sumgan": SumGANModel
             }.get(args["model"], LogisticRegressionModel)
 

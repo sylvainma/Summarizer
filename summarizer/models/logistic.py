@@ -9,12 +9,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from summarizer.models import Model
 
 """
-Logistic Regression as a baseline.
+Simple Logistic Regression.
 """
 
 class LogisticRegression(nn.Module):
     def __init__(self, input_dim=1024):
-        """Baseline model for Video Summarization"""
         super(LogisticRegression, self).__init__()
         self.input_dim = input_dim
         self.perceptron = nn.Linear(input_dim, 1)

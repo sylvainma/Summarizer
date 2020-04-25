@@ -96,25 +96,6 @@ class LogisticRegressionModel(Model):
 
         return best_corr, best_f_score
 
-    def test(self, fold):
-        self.model.eval()
-        _, test_keys = self._get_train_test_keys(fold)
-        summary = {}
-        with torch.no_grad():
-            for key in test_keys:
-                seq = self.dataset[key]['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
-
-                if self.hps.use_cuda:
-                    seq = seq.cuda()
-
-                y = self.model(seq)
-                summary[key] = y[0].detach().cpu().numpy()
-
-        corr = self._eval_scores(summary, test_keys)
-        f_score = self._eval_summary(summary, test_keys)
-        return corr, f_score
-
 
 if __name__ == "__main__":
     D, T = 1024, 300

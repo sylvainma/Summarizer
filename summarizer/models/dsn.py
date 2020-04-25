@@ -111,7 +111,7 @@ class DSNModel(Model):
 
                     # Compute reward of current episode
                     reward = self.compute_reward(seq, actions, 
-                        ignore_far_sim=self.ignore_far_sim,
+                        far_sim=self.far_sim,
                         temp_dist_thre=self.temp_dist_thre)
                     
                     # Negative policy gradient [Eq.10] of current episode

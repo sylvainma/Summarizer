@@ -20,31 +20,25 @@ from summarizer.models.sumgan import SumGANModel
 class HParameters:
     """Hyperparameters configuration class"""
     def __init__(self):
+        """Place in init the default values"""
         self.use_cuda = False
         self.cuda_device = 0
-        self.max_summary_length = 0.15
 
         self.l2_req = 0.00001
         self.lr = 0.00005
 
-        self.epochs_max = 300
-        self.train_batch_size = 1
+        self.epochs = 100
         self.test_every_epochs = 2
 
         # Project root directory
-        self.root = ''
-        # self.datasets = ['datasets/eccv16_dataset_summe_google_pool5.h5',
-        #                 'datasets/eccv16_dataset_tvsum_google_pool5.h5',
-        #                 'datasets/eccv16_dataset_ovp_google_pool5.h5',
-        #                 'datasets/eccv16_dataset_youtube_google_pool5.h5']
-        self.datasets = ['datasets/summarizer_dataset_summe_google_pool5.h5',
-                        'datasets/summarizer_dataset_tvsum_google_pool5.h5']
+        self.datasets = [
+            "datasets/summarizer_dataset_summe_google_pool5.h5",
+            "datasets/summarizer_dataset_tvsum_google_pool5.h5"]
 
         # Split files to be trained/tested on
         self.splits_files = [
-            'splits/tvsum_splits.json',
-            'splits/summe_splits.json'
-        ]
+            "splits/tvsum_splits.json",
+            "splits/summe_splits.json"]
 
         # Aggregation method for computing correlation and F-score
         # Must be in ["avg", "max"]
@@ -92,6 +86,8 @@ class HParameters:
         log_dir = str(int(datetime.datetime.now().timestamp()))
         log_dir += "_" + self.model_class.__name__
         self.log_path = os.path.join("logs", log_dir)
+        
+        # Tensorboard
         self.writer = SummaryWriter(self.log_path)
 
         # Handle use_cuda flag
@@ -158,9 +154,9 @@ class HParameters:
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
         vars = ["use_cuda", "cuda_device", "log_level", "agg",
-                "l2_req", "lr", "epochs_max",
+                "l2_req", "lr", "epochs",
                 "log_path", "splits_files", "extra_params"]
-        info_str = ''
+        info_str = ""
         for i, var in enumerate(vars):
             val = getattr(self, var)
             if isinstance(val, Variable):
@@ -172,7 +168,7 @@ class HParameters:
 
     def get_full_hps_dict(self):
         """Returns the list of hyperparameters as a flat dict"""
-        vars = ["l2_req", "lr", "epochs_max"]
+        vars = ["l2_req", "lr", "epochs"]
 
         hps = {}
         for i, var in enumerate(vars):
@@ -189,10 +185,10 @@ if __name__ == "__main__":
     print(hps)
     # Check update with args works well
     args = {
-        'root': 'root_dir',
-        'datasets': 'set1,set2,set3',
-        'splits': 'split1, split2',
-        'new_param_float': 1.23456
+        "root": "root_dir",
+        "datasets": "set1,set2,set3",
+        "splits": "split1, split2",
+        "new_param_float": 1.23456
     }
     hps.load_from_args(args)
     print(hps)

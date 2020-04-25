@@ -82,13 +82,12 @@ def test(hps):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("CS7643 Spring 2020 Project : Video Summarization")
+    parser = argparse.ArgumentParser("Summarizer")
     parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
-    parser.add_argument('-d', '--datasets', type=str, help="Path to a comma separated list of h5 datasets")
     parser.add_argument('-s', '--splits-files', type=str, help="Comma separated list of split files")
     parser.add_argument('-a', '--agg', choices=["avg", "max"], default="avg", help="Aggregation method for computing correlation and F-score")
     parser.add_argument('-m', '--model', type=str, help="Model class name")
-    parser.add_argument('-e', '--epochs-max', type=int, default=300, help="Number of epochs for train mode")
+    parser.add_argument('-e', '--epochs', type=int, help="Number of epochs for train mode")
     parser.add_argument('-w', '--weights-path', type=str, help="Weights path")
     parser.add_argument('-t', '--test', action='store_true', help="Test mode")
     parser.add_argument('-l', '--log-level', choices=['critical', 'error', 'warning', 'info', 'debug'], default='info', help="Set logger to custom level")

@@ -53,7 +53,7 @@ File is `summarizer_dataset_summe_google_pool5.h5`. Description from this [paper
 
 The original [SumMe](https://gyglim.github.io/me/vsum/) annotations are summaries `[0 1 1 ... 0]` (not frame importance scores). They are stored in `/user_summary`. They were used to generate `/gtscore`, `/gtsummary`, `/user_scores` as follows:
 
-* `/gtscore` come from the original data in SumMe. It was computed as the frame frequency for being selected by annotators. In other words, `gtscore(frame) = nb of times the frame is selected by annotators / nb of annotators`.
+* `/gtscore` comes from the original data in SumMe. It was computed as the frequency for each frame being selected by annotators. In other words, `gtscore(frame) = nb of times the frame is selected by annotators / nb of annotators`.
 
 * `/gtsummary` was computed by [dppLSTM](https://github.com/kezhang-cs/Video-Summarization-with-LSTM) with KTS+Knapsack with 15% time constraint on `/gtscore`.
 

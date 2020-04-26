@@ -115,7 +115,7 @@ class Model:
             if "user_summary" not in d:
                 self.log.error(f" No user_summary in video {key} for score evaluation")
 
-            user_scores = d["user_summary"][...] # TODO: pick the right thing here
+            user_scores = d["user_scores"][...]
             n_frames = d["n_frames"][()]
             positions = d["picks"][...]
 

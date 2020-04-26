@@ -1,0 +1,96 @@
+# Datasets
+Please download the preprocessed datasets files here (TODO: create and add the link).
+
+## Documentation
+Every `.h5` file has the following structure:
+```
+/key
+    /features
+        - 2D-array with shape (n_steps, feature-dimension)
+        - Feature representation of the frames, extracted from a pretrained CNN
+        - It is the input to most of the models
+    /user_summary
+        - 2D-array with shape (num_users, n_frames), each row is a binary vector
+        - This is used in evaluation for correlation and F-score
+    /gtscore
+        - 1D-array with shape (n_steps), stores ground truth importance scores (e.g. [.3 .8 ... .1])
+        - This is the target to predict in supervised models
+    /gtsummary
+        - 1D-array with shape (n_steps), ground truth summary (e.g. [0 1 ... 0])
+        - This can be used for maximum likelihood loss
+    /change_points
+        - 2D-array with shape (num_segments, 2), each row stores a segment and its frame indices (start, end)
+        - This is typically the result of KTS on the original video
+        - It is used in summary generation
+    /n_frame_per_seg
+        - 1D-array with shape (num_segments), indicates number of frames in each segment
+        - It is used in summary generation
+    /n_frames
+        - Integer, number of frames in original video
+    /n_steps
+        - Integer, number of subsampled frames
+    /picks
+        - 1D-array with shape (n_steps), positions of subsampled frames in original video
+        - This is a mapping where each element of /picks is the frame position in original video
+        - So min(picks) = 0 and max(picks) = n_frames
+        - It is used for evaluation and summary generation
+    /video_name
+        - String, original video name
+```
+
+Further details:
+* `gtscore` and `gtsummary` are used for training. Details about them are given for each dataset below.
+* `n_steps` is the number of frames to predict. The original number of frames is `n_frames`. For computational reasons, the frames were subsampled to `n_steps` for training.
+* `feature-dimension` is for instance 1024 as the frames have been forwarded through GoogleLeNet up to layer pool5 which is of length 1024.
+
+### SumMe
+File is `summarizer_dataset_summe_google_pool5.h5`. Description from this [paper](https://arxiv.org/abs/1903.11328):
+> SumMe is a video summarization dataset that contains 25 personal videos obtained from the YouTube. The videos are unedited or minimally edited. The dataset provides 15–18 reference summaries for each video. Human annotators individually made the reference summaries so that the length of each summary is less than 15% of the original video length.
+
+The original [SumMe](https://gyglim.github.io/me/vsum/) annotations are summaries `[0 1 1 ... 0]` (not frame importance scores). They are stored in `/user_summary`. They were used to generate `/gtscore` and `/gtsummary` as follows:
+
+* `/gtscore` come from the original data in SumMe. It was computed as the frame frequency for being selected by annotators. In other words, `gtscore(frame) = nb of times the frame is selected by annotators / nb of annotators`.
+
+* `/gtsummary` we did not found the origin of it. Assumption: this was computed by [dppLSTM paper](https://arxiv.org/abs/1605.08110) with KTS+Knapsack with 15% time constraint with `/gtscore`.
+
+### TVSum
+File is `summarizer_dataset_tvsum_google_pool5.h5`. Description from this [paper](https://arxiv.org/abs/1903.11328):
+> TVSum contains 50 YouTube videos, each of which has a title and a category label as metadata. Instead of providing reference summaries, the TVSum dataset provides human annotated importance scores.
+
+The original [TVSum](https://github.com/yalesong/tvsum/) annotations are importances scores in [1, 5] given by 20 people for each video. These score annotations are not saved in this `.h5` but they were used to generate `/user_summary`, `/gtscore` and `/gtsummary` as follows:
+
+* `/user_summary` was computed by [dppLSTM paper](https://arxiv.org/abs/1605.08110) (see supplementary material, §1.3 and §2.2). They used the original annotations scores and then used KTS and Knapsack to generate summaries with length constrainst of 15%.
+
+* `/gtscore` was provided in the original [TVSum data](https://github.com/yalesong/tvsum/blob/master/matlab/ydata-tvsum50.mat). The annotators gave a note between 1 and 5 to frames. The notes were averaged over annotators before being normalized to [0,1] with min-max normalization.
+
+* `/gtsummary` just like SumMe, we did not found the origin of it. Assumption: this was computed by [dppLSTM paper](https://arxiv.org/abs/1605.08110) with KTS+Knapsack with 15% time constraint with `/gtscore`.
+
+## Original videos and frames
+Download the original videos of the datasetsand place them as follows:
+```
+├── videos
+│   ├── summe
+│   │   ├── Air_Force_One.mp4
+│   │   ├── ...
+│   ├── tvsum
+│   │   ├── _xMr-HKMfVA.mp4
+│   │   ├── ...
+```
+You can extract the frames of the videos by using the `videos2frames` scripts. They will be saved as follows:
+```
+├── videos
+│   ├── summe
+│   │   ├── Air_Force_One.mp4
+│   │   ├── ...
+│   │   ├── frames
+│   │   │   ├── Air_Force_One
+│   │   │   │   ├── 000001.jpg
+│   │   │   │   ├── ...
+│   ├── tvsum
+│   │   ├── _xMr-HKMfVA.mp4
+│   │   ├── ...
+│   │   ├── frames
+│   │   │   ├── _xMr-HKMfVA
+│   │   │   │   ├── 000001.jpg
+│   │   │   │   ├── ...
+```

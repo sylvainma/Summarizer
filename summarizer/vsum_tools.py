@@ -61,11 +61,11 @@ def evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg="avg"):
     if metric == "kendalltau":
         f = lambda x, y: stats.kendalltau(stats.rankdata(-x), stats.rankdata(-y))[0]
     elif metric == "spearmanr":
-        f = lambda x, y: stats.spearmanr(x, y)[0]
+        f = lambda x, y: stats.spearmanr(stats.rankdata(-x), stats.rankdata(-y))[0]
     else:
         raise KeyError(f"Unknown metric {metric}")
 
-    # Compute correlation and average over users
+    # Compute correlation with each annotator
     corrs = [f(machine_scores, user_scores[i]) for i in range(n_users)]
     
     # Aggregation

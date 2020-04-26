@@ -69,7 +69,7 @@ class DSNModel(Model):
         reward_writers = {key: [] for key in train_keys}
 
         # To record performances of the best epoch
-        best_corr, best_f_score = 0.0, 0.0
+        best_corr, best_f_score = -1.0, 0.0
         
         # For each epoch
         for epoch in range(self.hps.epochs_max):

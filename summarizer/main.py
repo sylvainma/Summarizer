@@ -19,7 +19,7 @@ def train(hps):
         pred_path = hps.pred_path[splits_file]
 
         # For every fold in current split file
-        corr_max = 0.0
+        corr_max = -1.0
         model = hps.model_class(hps, splits_file)
         for fold in range(n_folds):
             fold_best_corr, fold_best_fscore = model.reset().train(fold)

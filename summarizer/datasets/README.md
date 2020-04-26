@@ -65,7 +65,7 @@ File is `summarizer_dataset_tvsum_google_pool5.h5`. Description from this [paper
 
 The original [TVSum](https://github.com/yalesong/tvsum/) annotations are importances scores in [1, 5] given by 20 people for each video. These score annotations were used to generate `/user_summary`, `/gtscore`, `/gtsummary`, `/user_scores` as follows:
 
-* `/user_summary` was computed by [dppLSTM](https://github.com/kezhang-cs/Video-Summarization-with-LSTM) (see [supplementary material](https://arxiv.org/abs/1605.08110), §1.3 and §2.2). They used the original annotations scores of TVSum and then used KTS+Knapsack with length constrainst of 15%.
+* `/user_summary` was computed by [dppLSTM](https://github.com/kezhang-cs/Video-Summarization-with-LSTM) (see [supplementary material](https://arxiv.org/abs/1605.08110), §1.3 and §2.2). They used the original annotations scores of TVSum and then used KTS+Knapsack with a length constraint of 15%.
 
 * `/gtscore` was provided in the original [TVSum data](https://github.com/yalesong/tvsum/blob/master/matlab/ydata-tvsum50.mat). The annotators gave a note between 1 and 5 to frames. The notes were averaged over annotators before being normalized to [0,1] with min-max normalization.
 

@@ -84,7 +84,7 @@ Download the original videos of the datasetsand place them as follows:
 │   │   ├── _xMr-HKMfVA.mp4
 │   │   ├── ...
 ```
-You can extract the frames of the videos by using the `videos2frames.{sh,bat}` scripts. They will be saved as follows:
+You can extract the frames of the videos by using the `videos2frames.{sh,bat}` scripts. Please make sure you have [FFmpeg](https://www.ffmpeg.org) installed. They will be saved as follows:
 ```
 ├── videos
 │   ├── summe

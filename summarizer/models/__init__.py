@@ -53,9 +53,9 @@ class Model:
                 y = self.model(seq)
                 summary[key] = y[0].detach().cpu().numpy()
 
-        corr = self._eval_scores(summary, test_keys)
-        f_score = self._eval_summary(summary, test_keys)
-        return corr, f_score
+        avg_corr = self._eval_scores(summary, test_keys)
+        avg_f_score, max_f_score = self._eval_summary(summary, test_keys)
+        return avg_corr, (avg_f_score, max_f_score)
 
     def predict(self, features):
         """Predict targets given features as input, should return a numpy"""
@@ -106,8 +106,7 @@ class Model:
     
     def _eval_scores(self, machine_summary_activations, test_keys):
         """Evaluate the importances scores using ranking correlation"""
-
-        corrs = []
+        avg_corrs = []
         for key in test_keys:
             d = self.dataset[key]
             probs = machine_summary_activations[key]
@@ -120,16 +119,15 @@ class Model:
             positions = d["picks"][...]
 
             machine_scores = generate_scores(probs, n_frames, positions)
-            corr = evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg=self.hps.agg)
-            corrs.append(corr)
+            avg_corr = evaluate_scores(machine_scores, user_scores, metric="spearmanr")
+            avg_corrs.append(avg_corr)
         
-        corr = np.mean(corrs)
-        return corr
+        avg_corr = np.mean(avg_corrs)
+        return avg_corr
 
     def _eval_summary(self, machine_summary_activations, test_keys):
         """Evaluate the final summary using the F-score"""
-
-        f_scores = []
+        avg_f_scores, max_f_scores = [], []
         for key in test_keys:
             d = self.dataset[key]
             probs = machine_summary_activations[key]
@@ -144,8 +142,10 @@ class Model:
             user_summary = d["user_summary"][...]
 
             machine_summary = generate_summary(probs, cps, num_frames, nfps, positions)
-            f_score = evaluate_summary(machine_summary, user_summary, agg=self.hps.agg)
-            f_scores.append(f_score)
+            avg_f_score, max_f_score = evaluate_summary(machine_summary, user_summary)
+            avg_f_scores.append(avg_f_score)
+            max_f_scores.append(max_f_score)
 
-        f_score = np.mean(f_scores)
-        return f_score
+        avg_f_score = np.mean(avg_f_scores)
+        max_f_score = np.mean(max_f_scores)
+        return avg_f_score, max_f_score

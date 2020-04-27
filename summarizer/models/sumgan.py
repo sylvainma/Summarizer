@@ -330,7 +330,7 @@ class SumGANModel(Model):
         best_corr, best_avg_f_score, best_max_f_score = -1.0, 0.0, 0.0
 
         # For each epoch
-        for epoch in range(self.hps.epochs_max):
+        for epoch in range(self.hps.epochs):
             train_avg_loss_s_e = []
             train_avg_loss_d = []
             train_avg_loss_c = []
@@ -432,7 +432,7 @@ class SumGANModel(Model):
             train_avg_D_x = np.mean(train_avg_D_x)
             train_avg_D_x_hat = np.mean(train_avg_D_x_hat)
             self.log.info("Epoch: {:6}   Lse: {:.05f}   Ld: {:.05f}   Lc: {:.05f}   D(x): {:.05f}   D(x_hat): {:.05f}".format(
-              str(epoch+1)+"/"+str(self.hps.epochs_max), train_avg_loss_s_e, train_avg_loss_d, 
+              str(epoch+1)+"/"+str(self.hps.epochs), train_avg_loss_s_e, train_avg_loss_d, 
               train_avg_loss_c, train_avg_D_x, train_avg_D_x_hat))
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Lse'.format(self.dataset_name, fold+1), train_avg_loss_s_e, epoch)
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Ld'.format(self.dataset_name, fold+1), train_avg_loss_d, epoch)

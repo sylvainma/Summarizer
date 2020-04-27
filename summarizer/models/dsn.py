@@ -72,7 +72,7 @@ class DSNModel(Model):
         best_corr, best_avg_f_score, best_max_f_score = -1.0, 0.0, 0.0
 
         # For each epoch
-        for epoch in range(self.hps.epochs_max):
+        for epoch in range(self.hps.epochs):
             epoch_avg_loss = []
             random.shuffle(train_keys)
 
@@ -144,7 +144,7 @@ class DSNModel(Model):
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_avg_reward, epoch)
             self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), epoch_avg_loss, epoch)
             self.log.info("Epoch: {:6}   Reward: {:.05f}   Loss: {:.05f}".format(
-                str(epoch+1)+"/"+str(self.hps.epochs_max), epoch_avg_reward, epoch_avg_loss))
+                str(epoch+1)+"/"+str(self.hps.epochs), epoch_avg_reward, epoch_avg_loss))
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:

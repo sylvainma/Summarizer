@@ -9,8 +9,9 @@ from summarizer.utils.config import HParameters
 def train(hps):
     """Training"""
     # For every split file
+    results = []
     for splits_file in hps.splits_files:
-        hps.logger.info("Start training on {}".format(splits_file))
+        hps.logger.info(f"Start training on {splits_file}")
         n_folds = len(hps.splits_of_file[splits_file])
         corrs_cv, avg_fscores_cv, max_fscores_cv = [], [], []
         
@@ -33,21 +34,27 @@ def train(hps):
                 model.save_best_weights(weights_path)
 
             # Report F-score of current fold
-            hps.logger.info("File: {}   Fold: {}/{}   Corr: {:0.5f}  Avg F-score: {:0.5f}  Max F-score: {:0.5f}".format(
-                splits_file, fold+1, n_folds, fold_best_corr, fold_best_avg_f_score, fold_best_max_f_score))
+            hps.logger.info(
+                f"File: {splits_file}   "
+                f"Fold: {fold+1}/{n_folds}   "
+                f"Corr: {fold_best_corr: 0.5f}  "
+                f"Avg F-score: {fold_best_avg_f_score:0.5f}  "
+                f"Max F-score: {fold_best_max_f_score:0.5f}")
 
         # Report cross-validation F-score of current split file and location of best weights
-        hps.logger.info("File: {:}   Cross-validation Corr: {:1.5f}  Avg F-score: {:0.5f}  Max F-score: {:0.5f}".format(
-            splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))
-        hps.logger.info("File: {:}   Best weights: {:}".format(
-            splits_file, weights_path))
+        hps.logger.info(
+            f"File: {splits_file}   "
+            f"Cross-validation Corr: {np.mean(corrs_cv): 0.5f}  "
+            f"Avg F-score: {np.mean(avg_fscores_cv):0.5f}  "
+            f"Max F-score: {np.mean(max_fscores_cv):0.5f}")
+        hps.logger.info(f"File: {splits_file}   Best weights: {weights_path}")
 
         # Log it for Tensorboard
         hparam_dict = hps.get_full_hps_dict()
         hparam_dict["dataset"] = hps.dataset_name_of_file[splits_file]
-        metric_dict = {"Correlation/Fold_{}".format(f+1): corr for f, corr in enumerate(corrs_cv)}
-        metric_dict = {"F-score_avg/Fold_{}".format(f+1): score for f, score in enumerate(avg_fscores_cv)}
-        metric_dict = {"F-score_max/Fold_{}".format(f+1): score for f, score in enumerate(max_fscores_cv)}
+        metric_dict = {f"Correlation/Fold_{f+1}": corr for f, corr in enumerate(corrs_cv)}
+        metric_dict = {f"F-score_avg/Fold_{f+1}": score for f, score in enumerate(avg_fscores_cv)}
+        metric_dict = {f"F-score_max/Fold_{f+1}": score for f, score in enumerate(max_fscores_cv)}
         metric_dict["Correlation/CV_Average"] = np.mean(corrs_cv)
         metric_dict["F-score_avg/CV_Average"] = np.mean(avg_fscores_cv)
         metric_dict["F-score_max/CV_Average"] = np.mean(max_fscores_cv)
@@ -56,43 +63,20 @@ def train(hps):
         # Predict on all videos of the dataset using the best weights
         model.reset().load_weights(weights_path)
         model.predict_dataset(pred_path)
-        hps.logger.info("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
+        hps.logger.info(f"File: {splits_file}   Machine summaries: {pred_path}")
 
-
-def test(hps):
-    """Evaluation on test keys"""
-    # For every split file
-    for splits_file in hps.splits_files:
-        hps.logger.info("Start testing on {}".format(splits_file))
-        n_folds = len(hps.splits_of_file[splits_file])
-        corr_avg, fscore_avg = 0.0, 0.0
-
-        # For every fold in current split file
-        for fold in range(n_folds):
-            model = hps.model_class(hps, splits_file, fold)
-            model.load_weights(hps.weights_of_file[splits_file])
-            corr, f_score = model.test()
-            corr_avg += corr
-            fscore_avg += fscore
-
-            # Report F-score of current fold
-            hps.logger.info("File: {}   Fold: {}/{}   Corr: {:0.5f}   F-score: {:0.5f}".format(
-                splits_file, fold+1, n_folds, corr, fscore))
-
-        # Report cross-validation F-score of current split file
-        fscore_avg /= n_folds
-        hps.logger.info("File: {:}   Average Corr: {:0.5f}   F-score: {:0.5f}".format(splits_file, fscore_avg))
+        # Save results of current splits file
+        results.append((splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))
+    
+    return results
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("CS7643 Spring 2020 Project : Video Summarization")
+    parser = argparse.ArgumentParser("Summarizer : Model Training")
     parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
-    parser.add_argument('-d', '--datasets', type=str, help="Path to a comma separated list of h5 datasets")
     parser.add_argument('-s', '--splits-files', type=str, help="Comma separated list of split files")
     parser.add_argument('-m', '--model', type=str, help="Model class name")
-    parser.add_argument('-e', '--epochs-max', type=int, default=300, help="Number of epochs for train mode")
-    parser.add_argument('-w', '--weights-path', type=str, help="Weights path")
-    parser.add_argument('-t', '--test', action='store_true', help="Test mode")
+    parser.add_argument('-e', '--epochs', type=int, help="Number of epochs for train mode")
     parser.add_argument('-l', '--log-level', choices=['critical', 'error', 'warning', 'info', 'debug'], default='info', help="Set logger to custom level")
     args, unknown_args = parser.parse_known_args()
 
@@ -107,10 +91,7 @@ if __name__ == "__main__":
     print(hps)
     print("----------------------------------------------------------------------")
 
-    if hps.test:
-        test(hps)
-    else:
-        train(hps)
+    train(hps)
 
     # Close the Tensorboard writer
     hps.writer.close()

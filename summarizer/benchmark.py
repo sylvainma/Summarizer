@@ -2,6 +2,8 @@ import os
 import sys
 import datetime
 import logging
+import argparse
+import torch
 import pandas as pd
 from tabulate import tabulate
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,31 +16,32 @@ integrated here. Once models are trained, a benchmark table is shown to
 termial but it is also saved into logs.
 """
 
-def benchmark(splits_files, max_epochs, log_path):
+def benchmark(args, log_path):
     """Successively train models"""
     table_results = []
+    base = {
+        "use_cuda": args.use_cuda,
+        "splits_files": args.splits_files,
+        "log_level": "error",
+    }
 
     ###############################
     # Random
     ###############################
-    table_results += benchmark_model("Random", {
-            "model": "random",
-            "splits_files": splits_files,
-            "epochs": 1,
-            "log_level": "error",
-            "extra_params": {}
-        })
+    table_results += benchmark_model("Random", dict({
+        "model": "random",
+        "epochs": 1,
+        "extra_params": {}
+    }, **base))
 
     ###############################
     # Logistic Regression
     ###############################
-    table_results += benchmark_model("Logistic Regression", {
-            "model": "logistic",
-            "splits_files": splits_files,
-            "epochs": min(30, max_epochs),
-            "log_level": "error",
-            "extra_params": {}
-        })
+    table_results += benchmark_model("Logistic Regression", dict({
+        "model": "logistic",
+        "epochs": min(30, args.max_epochs),
+        "extra_params": {}
+    }, **base))
 
     # Finally show results and save them in logs
     table = pd.DataFrame(table_results, columns=[
@@ -93,7 +96,23 @@ if __name__ == "__main__":
         "splits/summe_splits.json"])
 
     # Maximum number of epochs per model
-    max_epochs = 1
+    max_epochs = 300
+
+    # Args
+    parser = argparse.ArgumentParser("Summarizer : Benchmark")
+    parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
+    parser.add_argument('-e', '--max-epochs', type=int, default=max_epochs, help="Maximum number of epochs per model")
+    parser.add_argument('-s', '--splits-files', type=str, default=splits_files, help="Comma separated list of split files")
+    args, _ = parser.parse_known_args()
+
+    # Cuda
+    if args.use_cuda == "default":
+        args.use_cuda = torch.cuda.is_available()
+    elif args.use_cuda == "yes":
+        args.use_cuda = True
+    else:
+        args.use_cuda = False
 
     # Start benchmark
-    benchmark(splits_files, max_epochs, log_path)
+    print(args)
+    benchmark(args, log_path)

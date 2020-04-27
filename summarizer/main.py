@@ -11,7 +11,7 @@ def train(hps):
     # For every split file
     results = []
     for splits_file in hps.splits_files:
-        hps.logger.info("Start training on {}".format(splits_file))
+        hps.logger.info(f"Start training on {splits_file}")
         n_folds = len(hps.splits_of_file[splits_file])
         corrs_cv, avg_fscores_cv, max_fscores_cv = [], [], []
         
@@ -34,21 +34,27 @@ def train(hps):
                 model.save_best_weights(weights_path)
 
             # Report F-score of current fold
-            hps.logger.info("File: {}   Fold: {}/{}   Corr: {:0.5f}  Avg F-score: {:0.5f}  Max F-score: {:0.5f}".format(
-                splits_file, fold+1, n_folds, fold_best_corr, fold_best_avg_f_score, fold_best_max_f_score))
+            hps.logger.info(
+                f"File: {splits_file}   "
+                f"Fold: {fold+1}/{n_folds}   "
+                f"Corr: {fold_best_corr: 0.5f}  "
+                f"Avg F-score: {fold_best_avg_f_score:0.5f}  "
+                f"Max F-score: {fold_best_max_f_score:0.5f}")
 
         # Report cross-validation F-score of current split file and location of best weights
-        hps.logger.info("File: {:}   Cross-validation Corr: {:1.5f}  Avg F-score: {:0.5f}  Max F-score: {:0.5f}".format(
-            splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))
-        hps.logger.info("File: {:}   Best weights: {:}".format(
-            splits_file, weights_path))
+        hps.logger.info(
+            f"File: {splits_file}   "
+            f"Cross-validation Corr: {np.mean(corrs_cv): 0.5f}  "
+            f"Avg F-score: {np.mean(avg_fscores_cv):0.5f}  "
+            f"Max F-score: {np.mean(max_fscores_cv):0.5f}")
+        hps.logger.info(f"File: {splits_file}   Best weights: {weights_path}")
 
         # Log it for Tensorboard
         hparam_dict = hps.get_full_hps_dict()
         hparam_dict["dataset"] = hps.dataset_name_of_file[splits_file]
-        metric_dict = {"Correlation/Fold_{}".format(f+1): corr for f, corr in enumerate(corrs_cv)}
-        metric_dict = {"F-score_avg/Fold_{}".format(f+1): score for f, score in enumerate(avg_fscores_cv)}
-        metric_dict = {"F-score_max/Fold_{}".format(f+1): score for f, score in enumerate(max_fscores_cv)}
+        metric_dict = {f"Correlation/Fold_{f+1}": corr for f, corr in enumerate(corrs_cv)}
+        metric_dict = {f"F-score_avg/Fold_{f+1}": score for f, score in enumerate(avg_fscores_cv)}
+        metric_dict = {f"F-score_max/Fold_{f+1}": score for f, score in enumerate(max_fscores_cv)}
         metric_dict["Correlation/CV_Average"] = np.mean(corrs_cv)
         metric_dict["F-score_avg/CV_Average"] = np.mean(avg_fscores_cv)
         metric_dict["F-score_max/CV_Average"] = np.mean(max_fscores_cv)
@@ -57,7 +63,7 @@ def train(hps):
         # Predict on all videos of the dataset using the best weights
         model.reset().load_weights(weights_path)
         model.predict_dataset(pred_path)
-        hps.logger.info("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
+        hps.logger.info(f"File: {splits_file}   Machine summaries: {pred_path}")
 
         # Save results of current splits file
         results.append((splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))

@@ -54,8 +54,12 @@ def benchmark_model(name, args):
     model_results = train(hps)
     results = []
     for splits_file, corr, avg_fscore, max_fscore in model_results:
-        logging.info(f"File: {splits_file}  Corr: {corr}  Avg F-score: {avg_fscore} Max F-score: {max_fscore}")
         results.append([name, splits_file, corr, avg_fscore, max_fscore, hps.log_path])
+        logging.info(
+            f"File: {splits_file}  "
+            f"Corr: {corr: 0.5f}  "
+            f"Avg F-score: {avg_fscore:0.5f}  "
+            f"Max F-score: {max_fscore:0.5f}")
     logging.info(f"Logs saved in {hps.log_path}")
     return results
 

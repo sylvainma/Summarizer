@@ -40,10 +40,6 @@ class HParameters:
             "splits/tvsum_splits.json",
             "splits/summe_splits.json"]
 
-        # Aggregation method for computing correlation and F-score
-        # Must be in ["avg", "max"]
-        self.agg = "avg"
-
         # Default model
         self.model_class = LogisticRegressionModel
 
@@ -153,7 +149,7 @@ class HParameters:
 
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
-        vars = ["use_cuda", "cuda_device", "log_level", "agg",
+        vars = ["use_cuda", "cuda_device", "log_level",
                 "l2_req", "lr", "epochs",
                 "log_path", "splits_files", "extra_params"]
         info_str = ""

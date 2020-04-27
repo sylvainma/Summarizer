@@ -46,14 +46,13 @@ def generate_scores(probs, n_frames, positions):
     machine_scores = upsample(probs, n_frames, positions)
     return machine_scores
 
-def evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg="avg"):
+def evaluate_scores(machine_scores, user_scores, metric="spearmanr"):
     """Compare machine scores with user scores (keyframe-based).
     Input
       machine_scores: (n_frames,)
       user_scores: (n_users, n_frames)
-      agg: aggregator over user summaries, ['avg', 'max']
     Output
-      avg_corr: (1,)
+      avg_corr, max_corr: (1,)
     """
     n_users, _ = user_scores.shape
 
@@ -61,22 +60,16 @@ def evaluate_scores(machine_scores, user_scores, metric="spearmanr", agg="avg"):
     if metric == "kendalltau":
         f = lambda x, y: stats.kendalltau(stats.rankdata(-x), stats.rankdata(-y))[0]
     elif metric == "spearmanr":
-        f = lambda x, y: stats.spearmanr(x, y)[0]
+        f = lambda x, y: stats.spearmanr(stats.rankdata(-x), stats.rankdata(-y))[0]
     else:
         raise KeyError(f"Unknown metric {metric}")
 
-    # Compute correlation and average over users
+    # Compute correlation with each annotator
     corrs = [f(machine_scores, user_scores[i]) for i in range(n_users)]
     
-    # Aggregation
-    if agg == "avg":
-        corr = np.mean(corrs)
-    elif agg == "max":
-        corr = np.max(corrs)
-    else:
-        raise KeyError(f"Unknown aggregator {agg}")
-
-    return corr
+    # Mean over all annotators
+    avg_corr = np.mean(corrs)
+    return avg_corr
 
 def generate_summary(scores, cps, n_frames, nfps, positions, proportion=0.15, method="knapsack"):
     """Generate keyshot-based video summary i.e. a binary vector.
@@ -129,14 +122,13 @@ def generate_summary(scores, cps, n_frames, nfps, positions, proportion=0.15, me
     summary = np.delete(summary, 0)
     return summary
 
-def evaluate_summary(machine_summary, user_summary, agg="avg"):
+def evaluate_summary(machine_summary, user_summary):
     """Compare machine summary with user summary (keyshot-based).
     Input
       machine_summary: (n_frames,)
       user_summary: (n_users, n_frames)
-      agg: aggregator over user summaries, ['avg', 'max']
     Output
-      final_f_score: (1,)
+      avg_f_score, max_f_score: (1,)
     """
     machine_summary = machine_summary.astype(np.float32)
     user_summary = user_summary.astype(np.float32)
@@ -169,16 +161,6 @@ def evaluate_summary(machine_summary, user_summary, agg="avg"):
         prec_arr.append(precision)
         rec_arr.append(recall)
 
-    if agg == "avg":
-        final_f_score = np.mean(f_scores)
-        final_prec = np.mean(prec_arr)
-        final_rec = np.mean(rec_arr)
-    elif agg == "max":
-        final_f_score = np.max(f_scores)
-        max_idx = np.argmax(f_scores)
-        final_prec = prec_arr[max_idx]
-        final_rec = rec_arr[max_idx]
-    else:
-        raise KeyError(f"Unknown aggregator {agg}")
-
-    return final_f_score
+    avg_f_score = np.mean(f_scores)
+    max_f_score = np.max(f_scores)
+    return avg_f_score, max_f_score

@@ -41,7 +41,8 @@ def benchmark(splits_files, max_epochs, log_path):
         })
 
     # Finally show results and save them in logs
-    table = pd.DataFrame(table_results, columns=["Model", "File", "Correlation", "F-score", "Logs"])
+    table = pd.DataFrame(table_results, columns=[
+        "Model", "File", "Correlation", "Avg F-score", "Max F-score", "Logs"])
     show_save_results(table, log_path)
 
 
@@ -52,9 +53,9 @@ def benchmark_model(name, args):
     hps.load_from_args(args)
     model_results = train(hps)
     results = []
-    for splits_file, corr, fscore in model_results:
-        logging.info(f"File: {splits_file}   Corr: {corr}   F-score: {fscore}")
-        results.append([name, splits_file, corr, fscore, hps.log_path])
+    for splits_file, corr, avg_fscore, max_fscore in model_results:
+        logging.info(f"File: {splits_file}  Corr: {corr}  Avg F-score: {avg_fscore} Max F-score: {max_fscore}")
+        results.append([name, splits_file, corr, avg_fscore, max_fscore, hps.log_path])
     logging.info(f"Logs saved in {hps.log_path}")
     return results
 

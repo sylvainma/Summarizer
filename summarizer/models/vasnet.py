@@ -173,7 +173,7 @@ class VASNetModel(Model):
         self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr, weight_decay=self.hps.l2_req)
 
         # To record performances of the best epoch
-        best_corr, best_f_score = 0.0, 0.0
+        best_corr, best_avg_f_score, best_max_f_score = -1.0, 0.0, 0.0
 
         # For each epoch
         for epoch in range(self.hps.epochs):
@@ -211,17 +211,18 @@ class VASNetModel(Model):
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
-                corr, f_score = self.test(fold)
+                avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), corr, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
-                if f_score > best_f_score:
-                    best_f_score = f_score
-                if corr > best_corr:
-                    best_corr = corr
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
+                best_avg_f_score = max(best_avg_f_score, avg_f_score)
+                best_max_f_score = max(best_max_f_score, max_f_score)
+                if avg_corr > best_corr:
+                    best_corr = avg_corr
                     self.best_weights = self.model.state_dict()
 
-        return best_corr, best_f_score
+        return best_corr, best_avg_f_score, best_max_f_score
 
 
 if __name__ == "__main__":

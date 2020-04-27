@@ -13,19 +13,20 @@ def train(hps):
     for splits_file in hps.splits_files:
         hps.logger.info("Start training on {}".format(splits_file))
         n_folds = len(hps.splits_of_file[splits_file])
-        corrs_cv, fscores_cv = [], []
+        corrs_cv, avg_fscores_cv, max_fscores_cv = [], [], []
         
         # Destination for weights and predictions on dataset
         weights_path = hps.weights_path[splits_file]
         pred_path = hps.pred_path[splits_file]
 
         # For every fold in current split file
-        corr_max = 0.0
+        corr_max = -1.0
         model = hps.model_class(hps, splits_file)
         for fold in range(n_folds):
-            fold_best_corr, fold_best_fscore = model.reset().train(fold)
+            fold_best_corr, fold_best_avg_f_score, fold_best_max_f_score = model.reset().train(fold)
             corrs_cv.append(fold_best_corr)
-            fscores_cv.append(fold_best_fscore)
+            avg_fscores_cv.append(fold_best_avg_f_score)
+            max_fscores_cv.append(fold_best_max_f_score)
             
             # Save weights if it is the current maximum correlation
             if fold_best_corr > corr_max:
@@ -33,12 +34,12 @@ def train(hps):
                 model.save_best_weights(weights_path)
 
             # Report F-score of current fold
-            hps.logger.info("File: {}   Fold: {}/{}   Corr: {:0.5f}   F-score: {:0.5f}".format(
-                splits_file, fold+1, n_folds, fold_best_corr, fold_best_fscore))
+            hps.logger.info("File: {}   Fold: {}/{}   Corr: {:0.5f}  Avg F-score: {:0.5f}  Max F-score: {:0.5f}".format(
+                splits_file, fold+1, n_folds, fold_best_corr, fold_best_avg_f_score, fold_best_max_f_score))
 
         # Report cross-validation F-score of current split file and location of best weights
-        hps.logger.info("File: {:}   Cross-validation Corr: {:0.5f}   F-score: {:0.5f}".format(
-            splits_file, np.mean(corrs_cv), np.mean(fscores_cv)))
+        hps.logger.info("File: {:}   Cross-validation Corr: {:1.5f}  Avg F-score: {:0.5f}  Max F-score: {:0.5f}".format(
+            splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))
         hps.logger.info("File: {:}   Best weights: {:}".format(
             splits_file, weights_path))
 
@@ -46,9 +47,11 @@ def train(hps):
         hparam_dict = hps.get_full_hps_dict()
         hparam_dict["dataset"] = hps.dataset_name_of_file[splits_file]
         metric_dict = {"Correlation/Fold_{}".format(f+1): corr for f, corr in enumerate(corrs_cv)}
-        metric_dict = {"F-score/Fold_{}".format(f+1): score for f, score in enumerate(fscores_cv)}
+        metric_dict = {"F-score_avg/Fold_{}".format(f+1): score for f, score in enumerate(avg_fscores_cv)}
+        metric_dict = {"F-score_max/Fold_{}".format(f+1): score for f, score in enumerate(max_fscores_cv)}
         metric_dict["Correlation/CV_Average"] = np.mean(corrs_cv)
-        metric_dict["F-score/CV_Average"] = np.mean(fscores_cv)
+        metric_dict["F-score_avg/CV_Average"] = np.mean(avg_fscores_cv)
+        metric_dict["F-score_max/CV_Average"] = np.mean(max_fscores_cv)
         hps.writer.add_hparams(hparam_dict, metric_dict)
 
         # Predict on all videos of the dataset using the best weights
@@ -57,7 +60,7 @@ def train(hps):
         hps.logger.info("File: {0:}   Machine summaries: {1:}".format(splits_file, pred_path))
 
         # Save results of current splits file
-        results.append((splits_file, np.mean(corrs_cv), np.mean(fscores_cv)))
+        results.append((splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))
     
     return results
 
@@ -91,7 +94,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Summarizer")
     parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
     parser.add_argument('-s', '--splits-files', type=str, help="Comma separated list of split files")
-    parser.add_argument('-a', '--agg', choices=["avg", "max"], default="avg", help="Aggregation method for computing correlation and F-score")
     parser.add_argument('-m', '--model', type=str, help="Model class name")
     parser.add_argument('-e', '--epochs', type=int, help="Number of epochs for train mode")
     parser.add_argument('-w', '--weights-path', type=str, help="Weights path")

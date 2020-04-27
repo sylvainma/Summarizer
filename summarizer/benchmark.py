@@ -20,7 +20,6 @@ def benchmark(args, log_path):
     """Successively train models"""
     table_results = []
     base = {
-        "use_cuda": args.use_cuda,
         "splits_files": args.splits_files,
         "log_level": "error",
     }
@@ -100,18 +99,9 @@ if __name__ == "__main__":
 
     # Args
     parser = argparse.ArgumentParser("Summarizer : Benchmark")
-    parser.add_argument('-c', '--use-cuda', choices=['yes', 'no', 'default'], default='default', help="Use cuda for pytorch models")
     parser.add_argument('-e', '--max-epochs', type=int, default=max_epochs, help="Maximum number of epochs per model")
     parser.add_argument('-s', '--splits-files', type=str, default=splits_files, help="Comma separated list of split files")
     args, _ = parser.parse_known_args()
-
-    # Cuda
-    if args.use_cuda == "default":
-        args.use_cuda = torch.cuda.is_available()
-    elif args.use_cuda == "yes":
-        args.use_cuda = True
-    else:
-        args.use_cuda = False
 
     # Start benchmark
     print(args)

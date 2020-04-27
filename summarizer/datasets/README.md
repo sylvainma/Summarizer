@@ -1,5 +1,5 @@
 # Datasets
-Please download the preprocessed datasets files `summarizer_dataset_*.h5` [here](https://drive.google.com/open?id=1sbZZalh43n6fiSxWt_SIGgv72bt4rdoG) and place them here.
+Please download the preprocessed datasets files `summarizer_dataset_*.h5` [here](https://drive.google.com/open?id=1sbZZalh43n6fiSxWt_SIGgv72bt4rdoG) and place them here. Alternatively you can run `python download_datasets.py` to download them automatically.
 
 ## Documentation
 Every `.h5` file has the following structure:

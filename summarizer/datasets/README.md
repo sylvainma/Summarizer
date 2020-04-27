@@ -1,5 +1,5 @@
 # Datasets
-Please download the preprocessed datasets files `summarizer_dataset_*.h5` [here](https://drive.google.com/open?id=1sbZZalh43n6fiSxWt_SIGgv72bt4rdoG).
+Please download the preprocessed datasets files `summarizer_dataset_*.h5` [here](https://drive.google.com/open?id=1sbZZalh43n6fiSxWt_SIGgv72bt4rdoG) and place them here.
 
 ## Documentation
 Every `.h5` file has the following structure:
@@ -35,14 +35,14 @@ Every `.h5` file has the following structure:
     /picks
         - 1D-array with shape (n_steps), positions of subsampled frames in original video
         - This is a mapping where each element of /picks is the frame position in original video
-        - So min(picks) = 0 and max(picks) = n_frames
+        - So min(picks) = 0 and max(picks) = n_frames-1
         - It is used for evaluation and summary generation
     /video_name
         - String, original video name
 ```
 
 Further details:
-* `gtscore` and `gtsummary` are used for training. Details about them are given for each dataset below.
+* `/gtscore` and `/gtsummary` are used for training. Details about them are given for each dataset below.
 * `n_steps` is the number of frames to predict. The original number of frames is `n_frames`. For computational reasons, the frames were subsampled to `n_steps` for training.
 * `feature-dimension` is for instance 1024 as the frames were forwarded through GoogleLeNet up to layer pool5 which is of length 1024.
 * `/user_scores` is used for scores correlation evaluation, and depends on the dataset, see sections below for details.

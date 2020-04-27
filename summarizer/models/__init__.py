@@ -85,14 +85,16 @@ class Model:
                 nfps = d['n_frame_per_seg'][...].tolist()
                 positions = d['picks'][...]
                 user_summary = d['user_summary'][...]
-                # Predict scores and compute machine summary
+                # Predict scores and compute machine summary/scores
                 scores = self.predict(features)
                 machine_summary = generate_summary(scores, cps, n_frames, nfps, positions)
+                machine_scores = generate_scores(scores, n_frames, positions)
                 # Save in hdfs5 file
                 k = g.create_group(key)
                 k.create_dataset("scores", data=scores)
                 k.create_dataset("user_summary", data=user_summary)
                 k.create_dataset("machine_summary", data=machine_summary)
+                k.create_dataset("machine_scores", data=machine_scores)
 
     def save_best_weights(self, weights_path):
         """Dump current best weights"""

@@ -63,7 +63,7 @@ def train(hps):
         # Predict on all videos of the dataset using the best weights
         model.reset().load_weights(weights_path)
         model.predict_dataset(pred_path)
-        hps.logger.info(f"File: {splits_file}   Machine summaries: {pred_path}")
+        hps.logger.info(f"File: {splits_file}   Machine predictions: {pred_path}")
 
         # Save results of current splits file
         results.append((splits_file, np.mean(corrs_cv), np.mean(avg_fscores_cv), np.mean(max_fscores_cv)))

@@ -9,12 +9,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from summarizer.models import Model
 
 """
-Logistic Regression as a baseline.
+Simple Logistic Regression.
 """
 
 class LogisticRegression(nn.Module):
     def __init__(self, input_dim=1024):
-        """Baseline model for Video Summarization"""
         super(LogisticRegression, self).__init__()
         self.input_dim = input_dim
         self.perceptron = nn.Linear(input_dim, 1)
@@ -44,11 +43,10 @@ class LogisticRegressionModel(Model):
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req
-        )
+            weight_decay=self.hps.l2_req)
 
         # To record performances of the best epoch
-        best_f_score = 0.0
+        best_corr, best_avg_f_score, best_max_f_score = -1.0, 0.0, 0.0
 
         # For each epoch
         for epoch in range(self.hps.epochs_max):
@@ -86,14 +84,18 @@ class LogisticRegressionModel(Model):
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
-                f_score = self.test(fold)
+                avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score'.format(self.dataset_name, fold+1), f_score, epoch)
-                if f_score > best_f_score:
-                    best_f_score = f_score
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
+                best_avg_f_score = max(best_avg_f_score, avg_f_score)
+                best_max_f_score = max(best_max_f_score, max_f_score)
+                if avg_corr > best_corr:
+                    best_corr = avg_corr
                     self.best_weights = self.model.state_dict()
 
-        return best_f_score
+        return best_corr, best_avg_f_score, best_max_f_score
 
 
 if __name__ == "__main__":

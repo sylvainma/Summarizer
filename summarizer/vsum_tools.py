@@ -1,41 +1,26 @@
-''''
-Courtesy of KaiyangZhou
-https://github.com/KaiyangZhou/pytorch-vsumm-reinforce
-
-@article{zhou2017reinforcevsumm,
-   title={Deep Reinforcement Learning for Unsupervised Video Summarization with Diversity-Representativeness Reward},
-   author={Zhou, Kaiyang and Qiao, Yu and Xiang, Tao},
-   journal={arXiv:1801.00054},
-   year={2017}
-}
-
-Modifications by Jiri Fajtl
-- knapsack replaced with knapsack_ortools
-- added evaluate_user_summaries() for user summaries ground truth evaluation
-'''
-
 import os
 import sys
 import math
 import numpy as np
-#from knapsack import knapsack_dp
+from scipy import stats
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.knapsack import knapsack_ortools
 
+"""
+From original implementations of Kaiyang Zhou and Jiri Fajtl
+https://github.com/KaiyangZhou/pytorch-vsumm-reinforce
+https://github.com/ok1zjf/VASNet
+"""
 
-def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, method='knapsack'):
-    """Generate keyshot-based video summary i.e. a binary vector.
-    Args:
-    ---------------------------------------------
-    - ypred: predicted importance scores.
-    - cps: change points, 2D matrix, each row contains a segment.
-    - n_frames: original number of frames.
-    - nfps: number of frames per segment.
-    - positions: positions of subsampled frames in the original video.
-    - proportion: length of video summary (compared to original video length).
-    - method: defines how shots are selected, ['knapsack', 'rank'].
+def upsample(scores, n_frames, positions):
+    """Upsample scores vector to the original number of frames.
+    Input
+      scores: (n_steps,)
+      n_frames: (1,)
+      positions: (n_steps, 1)
+    Output
+      frame_scores: (n_frames,)
     """
-    n_segs = cps.shape[0]
     frame_scores = np.zeros((n_frames), dtype=np.float32)
     if positions.dtype != int:
         positions = positions.astype(np.int32)
@@ -43,10 +28,64 @@ def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, met
         positions = np.concatenate([positions, [n_frames]])
     for i in range(len(positions) - 1):
         pos_left, pos_right = positions[i], positions[i+1]
-        if i == len(ypred):
+        if i == len(scores):
             frame_scores[pos_left:pos_right] = 0
         else:
-            frame_scores[pos_left:pos_right] = ypred[i]
+            frame_scores[pos_left:pos_right] = scores[i]
+    return frame_scores
+
+def generate_scores(probs, n_frames, positions):
+    """Set score to every original frame of the video for comparison with annotations.
+    Input
+      probs: (n_steps,)
+      n_frames: (1,)
+      positions: (n_steps, 1)
+    Output
+      machine_scores: (n_frames,)
+    """
+    machine_scores = upsample(probs, n_frames, positions)
+    return machine_scores
+
+def evaluate_scores(machine_scores, user_scores, metric="spearmanr"):
+    """Compare machine scores with user scores (keyframe-based).
+    Input
+      machine_scores: (n_frames,)
+      user_scores: (n_users, n_frames)
+    Output
+      avg_corr, max_corr: (1,)
+    """
+    n_users, _ = user_scores.shape
+
+    # Ranking correlation metrics
+    if metric == "kendalltau":
+        f = lambda x, y: stats.kendalltau(stats.rankdata(-x), stats.rankdata(-y))[0]
+    elif metric == "spearmanr":
+        f = lambda x, y: stats.spearmanr(stats.rankdata(-x), stats.rankdata(-y))[0]
+    else:
+        raise KeyError(f"Unknown metric {metric}")
+
+    # Compute correlation with each annotator
+    corrs = [f(machine_scores, user_scores[i]) for i in range(n_users)]
+    
+    # Mean over all annotators
+    avg_corr = np.mean(corrs)
+    return avg_corr
+
+def generate_summary(scores, cps, n_frames, nfps, positions, proportion=0.15, method="knapsack"):
+    """Generate keyshot-based video summary i.e. a binary vector.
+    Input
+      scores: predicted importance scores
+      cps: change points, 2D matrix, each row contains a segment
+      n_frames: original number of frames
+      nfps: number of frames per segment
+      positions: positions of subsampled frames in the original video
+      proportion: length of video summary (compared to original video length)
+      method: defines how shots are selected, ['knapsack', 'rank']
+    Output
+      summary: binary vector of shape (n_frames,)
+    """
+    n_segs = cps.shape[0]
+    frame_scores = upsample(scores, n_frames, positions)
 
     seg_score = []
     for seg_idx in range(n_segs):
@@ -57,7 +96,6 @@ def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, met
     limits = int(math.floor(n_frames * proportion))
 
     if method == 'knapsack':
-        #picks = knapsack_dp(seg_score, nfps, n_segs, limits)
         picks = knapsack_ortools(seg_score, nfps, n_segs, limits)
     elif method == 'rank':
         order = np.argsort(seg_score)[::-1].tolist()
@@ -68,9 +106,10 @@ def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, met
                 picks.append(i)
                 total_len += nfps[i]
     else:
-        raise KeyError("Unknown method {}".format(method))
+        raise KeyError(f"Unknown method {method}")
 
-    summary = np.zeros((1), dtype=np.float32) # this element should be deleted
+    # This first element should be deleted
+    summary = np.zeros((1), dtype=np.float32)
     for seg_idx in range(n_segs):
         nf = nfps[seg_idx]
         if seg_idx in picks:
@@ -79,18 +118,17 @@ def generate_summary(ypred, cps, n_frames, nfps, positions, proportion=0.15, met
             tmp = np.zeros((nf), dtype=np.float32)
         summary = np.concatenate((summary, tmp))
 
-    summary = np.delete(summary, 0) # delete the first element
+    # Delete the first element
+    summary = np.delete(summary, 0)
     return summary
 
-
-def evaluate_summary(machine_summary, user_summary, eval_metric='avg'):
+def evaluate_summary(machine_summary, user_summary):
     """Compare machine summary with user summary (keyshot-based).
-    Args:
-    --------------------------------
-    machine_summary and user_summary should be binary vectors of ndarray type.
-    eval_metric = {'avg', 'max'}
-    'avg' averages results of comparing multiple human summaries.
-    'max' takes the maximum (best) out of multiple comparisons.
+    Input
+      machine_summary: (n_frames,)
+      user_summary: (n_users, n_frames)
+    Output
+      avg_f_score, max_f_score: (1,)
     """
     machine_summary = machine_summary.astype(np.float32)
     user_summary = user_summary.astype(np.float32)
@@ -123,62 +161,6 @@ def evaluate_summary(machine_summary, user_summary, eval_metric='avg'):
         prec_arr.append(precision)
         rec_arr.append(recall)
 
-    if eval_metric == 'avg':
-        final_f_score = np.mean(f_scores)
-        final_prec = np.mean(prec_arr)
-        final_rec = np.mean(rec_arr)
-    elif eval_metric == 'max':
-        final_f_score = np.max(f_scores)
-        max_idx = np.argmax(f_scores)
-        final_prec = prec_arr[max_idx]
-        final_rec = rec_arr[max_idx]
-
-    return final_f_score, final_prec, final_rec
-
-
-def evaluate_user_summaries(user_summary, eval_metric='avg'):
-    """Compare machine summary with user summary (keyshot-based).
-    Args:
-    --------------------------------
-    machine_summary and user_summary should be binary vectors of ndarray type.
-    eval_metric = {'avg', 'max'}
-    'avg' averages results of comparing multiple human summaries.
-    'max' takes the maximum (best) out of multiple comparisons.
-    """
-    user_summary = user_summary.astype(np.float32)
-    n_users, _ = user_summary.shape
-
-    # binarization
-    user_summary[user_summary > 0] = 1
-
-    f_scores = []
-    prec_arr = []
-    rec_arr = []
-
-    for user_idx in range(n_users):
-        gt_summary = user_summary[user_idx, :]
-        for other_user_idx in range(user_idx+1, n_users):
-            other_gt_summary = user_summary[other_user_idx, :]
-            overlap_duration = (other_gt_summary * gt_summary).sum()
-            precision = overlap_duration / (other_gt_summary.sum() + 1e-8)
-            recall = overlap_duration / (gt_summary.sum() + 1e-8)
-            if precision == 0 and recall == 0:
-                f_score = 0.
-            else:
-                f_score = (2 * precision * recall) / (precision + recall)
-            f_scores.append(f_score)
-            prec_arr.append(precision)
-            rec_arr.append(recall)
-
-
-    if eval_metric == 'avg':
-        final_f_score = np.mean(f_scores)
-        final_prec = np.mean(prec_arr)
-        final_rec = np.mean(rec_arr)
-    elif eval_metric == 'max':
-        final_f_score = np.max(f_scores)
-        max_idx = np.argmax(f_scores)
-        final_prec = prec_arr[max_idx]
-        final_rec = rec_arr[max_idx]
-
-    return final_f_score, final_prec, final_rec
+    avg_f_score = np.mean(f_scores)
+    max_f_score = np.max(f_scores)
+    return avg_f_score, max_f_score

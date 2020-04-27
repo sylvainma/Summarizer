@@ -113,8 +113,9 @@ class Model:
             d = self.dataset[key]
             probs = machine_summary_activations[key]
 
-            if "user_summary" not in d:
-                self.log.error(f" No user_summary in video {key} for score evaluation")
+            if "user_scores" not in d:
+                raise Exception(f"No /user_scores in video {key} for score evaluation, "
+                                "make sure you have up-to-date .h5 dataset files.")
 
             user_scores = d["user_scores"][...]
             n_frames = d["n_frames"][()]
@@ -135,7 +136,8 @@ class Model:
             probs = machine_summary_activations[key]
 
             if "change_points" not in d:
-                self.log.error(f" No change points in dataset/video {key} for summary evaluation")
+                raise Exception(f"No /change_points in video {key} for summary evaluation, "
+                                "make sure you have up-to-date .h5 dataset files.")
 
             cps = d["change_points"][...]
             num_frames = d["n_frames"][()]

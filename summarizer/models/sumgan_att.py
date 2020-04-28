@@ -31,128 +31,70 @@ class Transformer(nn.Module):
             nn.Sigmoid())
 
     def forward(self, x):
-        x = x.transpose(0, 1)
-        encoder_out = self.transformer_encoder.forward(x)
-        scores = self.out(encoder_out)
-        scores = scores.transpose(0, 1)
-        return scores
-
-class eLSTM(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=2048, num_layers=2):
-        """Encoder LSTM"""
-        super(eLSTM, self).__init__()
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            bidirectional=False
-        )
-        self.mu = nn.Linear(hidden_size, hidden_size)
-        self.logvar = nn.Linear(hidden_size, hidden_size)
-
-    def forward(self, x):
-        """
-        Input 
+        """Pass through tranformer and a final sigmoid layer.
+        Input
           x: (seq_len, batch_size, input_size)
         Output
-          h_mu, h_logvar: (num_layers, batch_size, hidden_size)
-          c_last: (num_layers, batch_size, hidden_size)
+          scores: (seq_len, batch_size, 1)
         """
-        _, (h_last, c_last) = self.lstm(x)
-        h_mu = self.mu(h_last)
-        h_logvar = self.logvar(h_last)
-        return (h_mu, h_logvar), c_last
+        encoder_out = self.transformer_encoder.forward(x)
+        scores = self.out(encoder_out)
+        return scores
 
-class dLSTM(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=2048, num_layers=2):
-        """Decoder LSTM"""
-        super(dLSTM, self).__init__()
-        self.lstm = nn.LSTM(
-            input_size=hidden_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            bidirectional=False
-        )
-        self.recons = nn.Linear(hidden_size, input_size)
+class AutoencoderTransformer(nn.Module):
+    def __init__(self, input_size=1024, encoder_layers=4, attention_heads=8, epsilon=1e-5):
+        super(AutoencoderTransformer, self).__init__()
+        self.input_size = input_size
         
-    def forward_step(self, x_prev, h_prev, c_prev):
-        """Decode one sequence step.
-        Input
-          x_prev: (1, batch_size, hidden_size)
-          h_prev, c_prev: (num_layers, batch_size, hidden_size)
-        Output
-          x_next: (1, batch_size, hidden_size)
-          h_next, c_next: (num_layers, batch_size, hidden_size)
-        """
-        x_next, (h_next, c_next) = self.lstm(x_prev, (h_prev, c_prev))
-        return x_next, (h_next, c_next)
+        # Encoder
+        self.transformer_encoder_layer = nn.TransformerEncoderLayer(
+            d_model=input_size,
+            nhead=attention_heads,
+            dim_feedforward=input_size)
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer=self.transformer_encoder_layer, 
+            num_layers=encoder_layers)
 
-    def forward(self, seq_len, h_0, c_0):
-        """Decode entire sequence.
-        Input 
-          seq_len: (1,)
-          h_0, c_0: (num_layers, batch_size, hidden_size)
-        Output
-          x_hat: (1, batch_size, input_size)
-        """
-        batch_size, hidden_size = h_0.size(1), h_0.size(2)
-        x = torch.zeros(1, batch_size, hidden_size).to(h_0.device)
-        h, c = h_0, c_0
-        x_hat = []
-        for i in range(seq_len):
-            x, (h, c) = self.forward_step(x, h, c)
-            x_hat.append(self.recons(x))
-        x_hat = torch.cat(x_hat, dim=0)
-        x_hat = torch.flip(x_hat, (0,)) # reverse
-        return x_hat
-
-class VAE(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=2048, num_layers=2):
-        """Variational Auto Encoder LSTM"""
-        super(VAE, self).__init__()
+        # Decoder
+        self.transformer_decoder_layer = nn.TransformerDecoderLayer(
+            d_model=input_size,
+            nhead=attention_heads,
+            dim_feedforward=input_size)
+        self.transformer_decoder = nn.TransformerDecoder(
+            decoder_layer=self.transformer_decoder_layer, 
+            num_layers=encoder_layers)
         
-        self.e_lstm = eLSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers)
-        
-        self.d_lstm = dLSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers)
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.rand_like(std)
-        return mu + eps * std
-
     def forward(self, x):
-        """
-        Input 
+        """Pass through encoder-decoder transformer.
+        Input
           x: (seq_len, batch_size, input_size)
         Output
           x_hat: (seq_len, batch_size, input_size)
-          h_mu, h_logvar: (num_layers, batch_size, hidden_size)
         """
-        (h_mu, h_logvar), c = self.e_lstm(x)
-        h = self.reparameterize(h_mu, h_logvar)
-        x_hat = self.d_lstm(x.size(0), h, c)
-        return x_hat, (h_mu, h_logvar)
+        encoder_out = self.transformer_encoder(x)
+        x_hat = self.transformer_decoder(x, encoder_out)
+        return x_hat
 
 class Summarizer(nn.Module):
-    def __init__(self, input_size=1024, encoder_layers=2, attention_heads=4,
-                     edLSTM_hidden_size=2048, edLSTM_num_layers=2):
+    def __init__(self, input_size=1024, s_encoder_layers=2, s_attention_heads=4,
+                     ae_encoder_layers=2, ae_attention_heads=4):
         """Summarizer: Selector (Transformer) + VAE (eLSTM/dLSTM).
         Args
           input_size: size of the frame feature descriptor
-          encoder_layers: selector number of layers
-          attention_heads: selector number of heads
-          edLSTM_hidden_size: hidden size of eLSTM and dLSTM
-          edLSTM_num_layers: number of layers of eLSTM and dLSTM
+          s_encoder_layers: selector number of layers
+          s_attention_heads: selector number of heads
+          ae_encoder_layers: autoencoder number of layers
+          ae_attention_heads: autoencoder number of heads
         """
         super(Summarizer, self).__init__()
-        self.selector = Transformer(input_size=input_size, encoder_layers=encoder_layers, attention_heads=attention_heads)
-        self.vae = VAE(input_size=input_size, hidden_size=edLSTM_hidden_size, num_layers=edLSTM_num_layers)
+        self.selector = Transformer(
+            input_size=input_size,
+            encoder_layers=s_encoder_layers,
+            attention_heads=s_attention_heads)
+        self.ae = AutoencoderTransformer(
+            input_size=input_size,
+            encoder_layers=ae_encoder_layers,
+            attention_heads=ae_attention_heads)
 
     def forward(self, x, uniform=False, p=0.3):
         """
@@ -160,7 +102,6 @@ class Summarizer(nn.Module):
           x: (seq_len, batch_size, input_size)
         Output
           x_hat: (seq_len, batch_size, input_size)
-          h_mu, h_logvar: (num_layers, batch_size, hidden_size)
           scores: (seq_len, batch_size, 1)
         """
         if uniform:
@@ -171,8 +112,8 @@ class Summarizer(nn.Module):
             scores = self.selector(x)
         
         x_weighted = x * scores
-        x_hat, (h_mu, h_logvar) = self.vae(x_weighted)
-        return x_hat, (h_mu, h_logvar), scores
+        x_hat = self.ae(x_weighted)
+        return x_hat, scores
 
 class cLSTM(nn.Module):
     def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
@@ -227,15 +168,15 @@ class GAN(nn.Module):
         return probs, h_last
 
 class SumGAN(nn.Module):
-    def __init__(self, input_size=1024, encoder_layers=2, attention_heads=4, 
-                        edLSTM_hidden_size=2048, edLSTM_num_layers=2,
+    def __init__(self, input_size=1024, s_encoder_layers=2, s_attention_heads=4, 
+                        ae_encoder_layers=2, ae_attention_heads=4,
                         cLSTM_hidden_size=1024, cLSTM_num_layers=2):
         """SumGAN: Summarizer + GAN"""
         super(SumGAN, self).__init__()
         self.summarizer = Summarizer(
             input_size=input_size,
-            encoder_layers=encoder_layers, attention_heads=attention_heads,
-            edLSTM_hidden_size=edLSTM_hidden_size, edLSTM_num_layers=edLSTM_num_layers)
+            s_encoder_layers=s_encoder_layers, s_attention_heads=s_attention_heads,
+            ae_encoder_layers=ae_encoder_layers, ae_attention_heads=ae_attention_heads)
         self.gan = GAN(
             input_size=input_size,
             hidden_size=cLSTM_hidden_size, num_layers=cLSTM_num_layers)
@@ -255,34 +196,30 @@ class SumGANModel(Model):
         # SumGAN hyperparameters
         self.sigma = float(self.hps.extra_params.get("sigma", 0.3))
         self.input_size = int(self.hps.extra_params.get("input_size", 1024))
-        self.encoder_layers = int(self.hps.extra_params.get("encoder_layers", 2))
-        self.attention_heads = int(self.hps.extra_params.get("attention_heads", 4))
-        self.edLSTM_hidden_size = int(self.hps.extra_params.get("edLSTM_hidden_size", 2048))
-        self.edLSTM_num_layers = int(self.hps.extra_params.get("edLSTM_num_layers", 2))
+        self.s_encoder_layers = int(self.hps.extra_params.get("s_encoder_layers", 2))
+        self.s_attention_heads = int(self.hps.extra_params.get("s_attention_heads", 4))
+        self.ae_encoder_layers = int(self.hps.extra_params.get("ae_encoder_layers", 2))
+        self.ae_attention_heads = int(self.hps.extra_params.get("ae_attention_heads", 4))
         self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
         self.sup = bool(self.hps.extra_params.get("sup", False))
-        self.pretrain_vae = int(self.hps.extra_params.get("pretrain_vae", 100))
+        self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 100))
 
         # Model
         model = SumGAN(input_size=self.input_size,
-            encoder_layers=self.encoder_layers, attention_heads=self.attention_heads,
-            edLSTM_hidden_size=self.edLSTM_hidden_size, edLSTM_num_layers=self.edLSTM_num_layers,
+            s_encoder_layers=self.s_encoder_layers, s_attention_heads=self.s_attention_heads,
+            ae_encoder_layers=self.ae_encoder_layers, ae_attention_heads=self.ae_attention_heads,
             cLSTM_hidden_size=self.cLSTM_hidden_size, cLSTM_num_layers=self.cLSTM_num_layers)
         
         return model
 
-    def loss_vae(self, x, x_hat, mu, logvar):
-        """minimize log(p(x|e)) - D_KL(q(e|x) || p(e))"""
-        return self.loss_recons(x, x_hat) + self.loss_prior(mu, logvar)
-
+    def loss_ae(self, x, x_hat):
+        """minimize E[l2_norm(x - x_hat)]"""
+        return torch.norm(x - x_hat, p=2)
+    
     def loss_recons(self, h_real, h_fake):
         """minimize E[l2_norm(phi(x) - phi(x_hat))]"""
         return torch.norm(h_real - h_fake, p=2)
-
-    def loss_prior(self, mu, logvar):
-        """minimize -D_KL(q(e|x) || p(e))"""
-        return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     def loss_sparsity(self, scores, sigma):
         """minimize l2_norm(E[s_t] - sigma)"""
@@ -307,13 +244,13 @@ class SumGANModel(Model):
     def pretrain(self, fold):
         """Pretrain VAE before learning the GAN, as recommended in paper"""
         train_keys, _ = self._get_train_test_keys(fold)
-        vae_optimizer = torch.optim.Adam(
-            self.model.summarizer.vae.parameters(),
+        ae_optimizer = torch.optim.Adam(
+            self.model.summarizer.ae.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
 
-        for epoch in range(self.pretrain_vae):
-            train_avg_loss_vae = []
+        for epoch in range(self.pretrain_ae):
+            train_avg_loss_ae = []
             random.shuffle(train_keys)
 
             for key in train_keys:
@@ -325,18 +262,18 @@ class SumGANModel(Model):
                     x = x.cuda()
                 
                 # Pretrain the lstm VAE
-                x_hat, (mu, logvar) = self.model.summarizer.vae(x)
-                loss_vae = self.loss_vae(x, x_hat, mu, logvar)
-                vae_optimizer.zero_grad()
-                loss_vae.backward()
+                x_hat = self.model.summarizer.ae(x)
+                loss_ae = self.loss_ae(x, x_hat)
+                ae_optimizer.zero_grad()
+                loss_ae.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
-                vae_optimizer.step()
-                train_avg_loss_vae.append(float(loss_vae))
+                ae_optimizer.step()
+                train_avg_loss_ae.append(float(loss_ae))
 
             # Log VAE loss
             if epoch % 10 == 0:
-                train_avg_loss_vae = np.mean(train_avg_loss_vae)
-                self.log.info(f"Pretrain: {epoch+1:3}/{self.pretrain_vae:3}   Lvae: {train_avg_loss_vae:.05f}")
+                train_avg_loss_ae = np.mean(train_avg_loss_ae)
+                self.log.info(f"Pretrain: {epoch+1:3}/{self.pretrain_ae:3}   Lae: {train_avg_loss_ae:.05f}")
 
             # Free unused memory from GPU
             torch.cuda.empty_cache()
@@ -346,17 +283,19 @@ class SumGANModel(Model):
         train_keys, _ = self._get_train_test_keys(fold)
 
         # Pretrain VAE
-        if self.pretrain_vae > 0:
+        if self.pretrain_ae > 0:
             self.pretrain(fold)
         
         # Optimization
         self.s_e_optimizer = torch.optim.Adam(
             list(self.model.summarizer.selector.parameters())
-            + list(self.model.summarizer.vae.e_lstm.parameters()),
+            + list(self.model.summarizer.ae.transformer_encoder.parameters())
+            + list(self.model.summarizer.ae.transformer_encoder_layer.parameters()),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
         self.d_optimizer = torch.optim.Adam(
-            self.model.summarizer.vae.d_lstm.parameters(),
+            list(self.model.summarizer.ae.transformer_decoder.parameters())
+            + list(self.model.summarizer.ae.transformer_decoder_layer.parameters()),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
         self.c_optimizer = torch.optim.Adam(
@@ -401,18 +340,17 @@ class SumGANModel(Model):
                 # Selector and Encoder update
                 ###############################
                 # Forward
-                x_hat, (mu, logvar), scores = self.model.summarizer(x)
+                x_hat, scores = self.model.summarizer(x)
                 _, h_real = self.model.gan(x)
                 _, h_fake = self.model.gan(x_hat)
 
                 # Losses
                 loss_recons = self.loss_recons(h_real, h_fake)
-                loss_prior = self.loss_prior(mu, logvar)
                 if self.sup:
                     loss_sparsity = self.loss_sparsity_sup(scores, y)
                 else:
                     loss_sparsity = self.loss_sparsity(scores, self.sigma)
-                loss_s_e = loss_recons + loss_prior + loss_sparsity
+                loss_s_e = loss_recons + loss_sparsity
 
                 # Update
                 self.s_e_optimizer.zero_grad()
@@ -424,8 +362,8 @@ class SumGANModel(Model):
                 # Decoder update
                 ###############################
                 # Forward
-                x_hat, _, _ = self.model.summarizer(x)
-                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat, _ = self.model.summarizer(x)
+                x_hat_p, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
                 _, h_real = self.model.gan(x)
                 probs_fake, h_fake = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)
@@ -445,8 +383,8 @@ class SumGANModel(Model):
                 # Discriminator update
                 ###############################
                 # Forward
-                x_hat, _, _ = self.model.summarizer(x)
-                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat, _ = self.model.summarizer(x)
+                x_hat_p, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
                 probs_real, _ = self.model.gan(x)
                 probs_fake, _ = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)
@@ -516,13 +454,11 @@ if __name__ == "__main__":
 
     model = Summarizer()
     x = torch.randn(10, 3, 1024)
-    x_hat, (mu, logvar), scores = model(x)
-    print(x.shape, x_hat.shape, mu.shape, logvar.shape, scores.shape)
+    x_hat, scores = model(x)
+    print(x.shape, x_hat.shape, scores.shape)
     assert x.shape[0] == scores.shape[0]
     assert x.shape[1] == scores.shape[1]
     assert scores.shape[2] == 1
-    assert mu.shape[0] == logvar.shape[0]
-    assert mu.shape[2] == logvar.shape[2]
     assert x.shape[0] == x_hat.shape[0]
     assert x.shape[1] == x_hat.shape[1]
     assert x.shape[2] == x_hat.shape[2]

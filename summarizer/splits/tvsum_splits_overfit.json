@@ -1,0 +1,10 @@
+[
+    {
+        "train_keys": [
+            "video_1"
+        ],
+        "test_keys": [
+            "video_1"
+        ]
+    }
+]

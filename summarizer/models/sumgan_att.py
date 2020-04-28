@@ -12,6 +12,10 @@ from summarizer.models.sumgan import GAN
 
 """
 Upgraded version of SumGAN with Attention.
+* Transformer instead of sLSTM
+* Transformer-based autoencoder instead of lstm VAE
+* Add noise to inputs of the discriminator (cLSTM)
+* Use Wasserstein loss (WGAN)
 """
 
 class Transformer(nn.Module):
@@ -79,7 +83,7 @@ class AutoencoderTransformer(nn.Module):
 class Summarizer(nn.Module):
     def __init__(self, input_size=1024, s_encoder_layers=2, s_attention_heads=4,
                      ae_encoder_layers=2, ae_attention_heads=4):
-        """Summarizer: Selector (Transformer) + VAE (eLSTM/dLSTM).
+        """Summarizer: Selector (Transformer) + Autoencoder Transformer.
         Args
           input_size: size of the frame feature descriptor
           s_encoder_layers: selector number of layers
@@ -153,6 +157,7 @@ class SumGANAttModel(Model):
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
         self.sup = bool(self.hps.extra_params.get("sup", False))
         self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 100))
+        self.epoch_noise = int(self.hps.extra_params.get("epoch_noise", 0.2*self.hps.epochs))
 
         # Model
         model = SumGANAtt(input_size=self.input_size,
@@ -179,16 +184,12 @@ class SumGANAttModel(Model):
         return self.loss_BCE(scores, gtscores)
 
     def loss_gan_generator(self, probs_fake, probs_uniform):
-        """maximize E[log(cLSTM(x_hat))] + E[log(cLSTM(x_hat_p))]"""
-        label_real = torch.full_like(probs_fake, 1.0).to(probs_fake.device)
-        return self.loss_BCE(probs_fake, label_real) + self.loss_BCE(probs_uniform, label_real)
+        """maximize 0.5 * (cLSTM(x_hat) + cLSTM(x_hat_p))"""
+        return -0.5 * (probs_fake + probs_uniform)
 
     def loss_gan_discriminator(self, probs_real, probs_fake, probs_uniform):
-        """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))] + E[log(1 - cLSTM(x_hat_p))]"""
-        label_real = torch.full_like(probs_real, 1.0).to(probs_real.device)
-        label_fake = torch.full_like(probs_fake, 0.0).to(probs_fake.device)
-        return self.loss_BCE(probs_real, label_real) + self.loss_BCE(probs_fake, label_fake) \
-                    + self.loss_BCE(probs_uniform, label_fake)
+        """maximize cLSTM(x) - 0.5 * (cLSTM(x_hat) + cLSTM(x_hat_p))"""
+        return -probs_real + 0.5 * (probs_fake + probs_uniform)
 
     def pretrain(self, fold):
         """Pretrain VAE before learning the GAN, as recommended in paper"""
@@ -247,7 +248,7 @@ class SumGANAttModel(Model):
             + list(self.model.summarizer.ae.transformer_decoder_layer.parameters()),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
-        self.c_optimizer = torch.optim.Adam(
+        self.c_optimizer = torch.optim.SGD(
             self.model.gan.c_lstm.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
@@ -334,6 +335,10 @@ class SumGANAttModel(Model):
                 # Forward
                 x_hat, _ = self.model.summarizer(x)
                 x_hat_p, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                if epoch < self.epoch_noise:
+                    x = torch.rand_like(x) * x
+                    x_hat = x_hat * torch.rand_like(x_hat)
+                    x_hat_p = x_hat_p * torch.rand_like(x_hat_p)
                 probs_real, _ = self.model.gan(x)
                 probs_fake, _ = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)

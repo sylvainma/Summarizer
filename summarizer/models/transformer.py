@@ -80,6 +80,7 @@ class Transformer(nn.Module):
             elif self.pos_embed_type == "attention":
                 x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, feature_dim).to(x.device)
 
+        x = x.view(seq_len, batch_size, feature_dim)
         encoder_out = self.transformer_encoder.forward(x)
         
         if self.more_residuals:

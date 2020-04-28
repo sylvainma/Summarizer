@@ -265,7 +265,7 @@ class SumGANModel(Model):
         self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
         self.sup = bool(self.hps.extra_params.get("sup", False))
-        self.pretrain_vae = min(int(self.hps.extra_params.get("pretrain_vae", 0)), self.hps.epochs)
+        self.pretrain_vae = int(self.hps.extra_params.get("pretrain_vae", 100))
 
         # Model
         model = SumGAN(input_size=self.input_size,
@@ -276,9 +276,8 @@ class SumGANModel(Model):
         return model
 
     def loss_vae(self, x, x_hat, mu, logvar):
-        L_recons = torch.norm(x - x_hat, p=2)
-        L_prior = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        return L_recons + L_prior
+        """minimize log(p(x|e)) - D_KL(q(e|x) || p(e))"""
+        return self.loss_recons(x, x_hat) + self.loss_prior(mu, logvar)
 
     def loss_recons(self, h_real, h_fake):
         """minimize E[l2_norm(phi(x) - phi(x_hat))]"""
@@ -308,15 +307,52 @@ class SumGANModel(Model):
         return self.loss_BCE(probs_real, label_real) + self.loss_BCE(probs_fake, label_fake) \
                     + self.loss_BCE(probs_uniform, label_fake)
 
-    def train(self, fold):
-        self.model.train()
+    def pretrain(self, fold):
+        """Pretrain VAE before learning the GAN, as recommended in paper"""
         train_keys, _ = self._get_train_test_keys(fold)
-        
-        # Optimization
-        self.vae_optimizer = torch.optim.Adam(
+        vae_optimizer = torch.optim.Adam(
             self.model.summarizer.vae.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
+
+        for epoch in range(self.pretrain_vae):
+            train_avg_loss_vae = []
+            random.shuffle(train_keys)
+
+            for key in train_keys:
+                dataset = self.dataset[key]
+                x = dataset["features"][...]
+                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
+
+                if self.hps.use_cuda:
+                    x = x.cuda()
+                
+                # Pretrain the lstm VAE
+                x_hat, (mu, logvar) = self.model.summarizer.vae(x)
+                loss_vae = self.loss_vae(x, x_hat, mu, logvar)
+                vae_optimizer.zero_grad()
+                loss_vae.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
+                vae_optimizer.step()
+                train_avg_loss_vae.append(float(loss_vae))
+
+            # Log VAE loss
+            if epoch % 10 == 0:
+                train_avg_loss_vae = np.mean(train_avg_loss_vae)
+                self.log.info(f"Pretrain: {epoch+1:3}/{self.pretrain_vae:3}   Lvae: {train_avg_loss_vae:.05f}")
+
+            # Free unused memory from GPU
+            torch.cuda.empty_cache()
+
+    def train(self, fold):
+        self.model.train()
+        train_keys, _ = self._get_train_test_keys(fold)
+
+        # Pretrain VAE
+        if self.pretrain_vae > 0:
+            self.pretrain(fold)
+        
+        # Optimization
         self.s_e_optimizer = torch.optim.Adam(
             list(self.model.summarizer.s_lstm.parameters())
             + list(self.model.summarizer.vae.e_lstm.parameters()),
@@ -341,7 +377,6 @@ class SumGANModel(Model):
 
         # For each epoch
         for epoch in range(self.hps.epochs):
-            train_avg_loss_vae = []
             train_avg_loss_s_e = []
             train_avg_loss_d = []
             train_avg_loss_c = []
@@ -365,132 +400,115 @@ class SumGANModel(Model):
                 if self.hps.use_cuda:
                     x, y = x.cuda(), y.cuda()
                 
-                if epoch < self.pretrain_vae:
-                    ###############################
-                    # Pretrain the lstm VAE
-                    ###############################
-                    x_hat, (mu, logvar) = self.model.summarizer.vae(x)
-                    loss_vae = self.loss_vae(x, x_hat, mu, logvar)
-                    self.vae_optimizer.zero_grad()
-                    loss_vae.backward()
-                    nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
-                    self.vae_optimizer.step()
-                    train_avg_loss_vae.append(float(loss_vae))
+                ###############################
+                # Selector and Encoder update
+                ###############################
+                # Forward
+                x_hat, (mu, logvar), scores = self.model.summarizer(x)
+                _, h_real = self.model.gan(x)
+                _, h_fake = self.model.gan(x_hat)
+
+                # Losses
+                loss_recons = self.loss_recons(h_real, h_fake)
+                loss_prior = self.loss_prior(mu, logvar)
+                if self.sup:
+                    loss_sparsity = self.loss_sparsity_sup(scores, y)
                 else:
-                    ###############################
-                    # Selector and Encoder update
-                    ###############################
-                    # Forward
-                    x_hat, (mu, logvar), scores = self.model.summarizer(x)
-                    _, h_real = self.model.gan(x)
-                    _, h_fake = self.model.gan(x_hat)
+                    loss_sparsity = self.loss_sparsity(scores, self.sigma)
+                loss_s_e = loss_recons + loss_prior + loss_sparsity
 
-                    # Losses
-                    loss_recons = self.loss_recons(h_real, h_fake)
-                    loss_prior = self.loss_prior(mu, logvar)
-                    if self.sup:
-                        loss_sparsity = self.loss_sparsity_sup(scores, y)
-                    else:
-                        loss_sparsity = self.loss_sparsity(scores, self.sigma)
-                    loss_s_e = loss_recons + loss_prior + loss_sparsity
+                # Update
+                self.s_e_optimizer.zero_grad()
+                loss_s_e.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
+                self.s_e_optimizer.step()
 
-                    # Update
-                    loss_s_e.backward()
-                    nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
-                    self.s_e_optimizer.step()
-                    self.s_e_optimizer.zero_grad()
+                ###############################
+                # Decoder update
+                ###############################
+                # Forward
+                x_hat, _, _ = self.model.summarizer(x)
+                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                _, h_real = self.model.gan(x)
+                probs_fake, h_fake = self.model.gan(x_hat)
+                probs_uniform, _ = self.model.gan(x_hat_p)
 
-                    ###############################
-                    # Decoder update
-                    ###############################
-                    # Forward
-                    x_hat, (mu, logvar), scores = self.model.summarizer(x)
-                    x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
-                    _, h_real = self.model.gan(x)
-                    probs_fake, h_fake = self.model.gan(x_hat)
-                    probs_uniform, _ = self.model.gan(x_hat_p)
+                # Losses
+                loss_recons = self.loss_recons(h_real, h_fake)
+                loss_gan = self.loss_gan_generator(probs_fake, probs_uniform)
+                loss_d = loss_recons + loss_gan
 
-                    # Losses
-                    loss_recons = self.loss_recons(h_real, h_fake)
-                    loss_gan = self.loss_gan_generator(probs_fake, probs_uniform)
-                    loss_d = loss_recons + loss_gan
+                # Update
+                self.d_optimizer.zero_grad()
+                loss_d.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
+                self.d_optimizer.step()
 
-                    # Update
-                    loss_d.backward()
-                    nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
-                    self.d_optimizer.step()
-                    self.d_optimizer.zero_grad()
+                ###############################
+                # Discriminator update
+                ###############################
+                # Forward
+                x_hat, _, _ = self.model.summarizer(x)
+                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                probs_real, _ = self.model.gan(x)
+                probs_fake, _ = self.model.gan(x_hat)
+                probs_uniform, _ = self.model.gan(x_hat_p)
 
-                    ###############################
-                    # Discriminator update
-                    ###############################
-                    # Forward
-                    x_hat, (mu, logvar), scores = self.model.summarizer(x)
-                    x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
-                    probs_real, _ = self.model.gan(x)
-                    probs_fake, _ = self.model.gan(x_hat)
-                    probs_uniform, _ = self.model.gan(x_hat_p)
+                # Losses
+                loss_c = self.loss_gan_discriminator(probs_real, probs_fake, probs_uniform)
 
-                    # Losses
-                    loss_c = self.loss_gan_discriminator(probs_real, probs_fake, probs_uniform)
+                # Update
+                self.c_optimizer.zero_grad()
+                loss_c.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
+                self.c_optimizer.step()
 
-                    # Update
-                    loss_c.backward()
-                    nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
-                    self.c_optimizer.step()
-                    self.c_optimizer.zero_grad()
+                ###############################
+                # Record losses
+                ###############################
+                train_avg_loss_s_e.append(float(loss_s_e))
+                train_avg_loss_d.append(float(loss_d))
+                train_avg_loss_c.append(float(loss_c))
+                train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
+                train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
+                train_avg_D_x_hat_p.append(torch.mean(probs_uniform).detach().cpu().numpy())
 
-                    ###############################
-                    # Record losses
-                    ###############################
-                    train_avg_loss_s_e.append(float(loss_s_e))
-                    train_avg_loss_d.append(float(loss_d))
-                    train_avg_loss_c.append(float(loss_c))
-                    train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
-                    train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
-                    train_avg_D_x_hat_p.append(torch.mean(probs_uniform).detach().cpu().numpy())
+            # Log losses and probs for real and fake data by the end of the epoch
+            train_avg_loss_s_e = np.mean(train_avg_loss_s_e)
+            train_avg_loss_d = np.mean(train_avg_loss_d)
+            train_avg_loss_c = np.mean(train_avg_loss_c)
+            train_avg_D_x = np.mean(train_avg_D_x)
+            train_avg_D_x_hat = np.mean(train_avg_D_x_hat)
+            train_avg_D_x_hat_p = np.mean(train_avg_D_x_hat_p)
+            self.log.info(f"Epoch: {epoch+1:3}/{self.hps.epochs:3}   "
+                            f"Lse: {train_avg_loss_s_e:.05f}  "
+                            f"Ld: {train_avg_loss_d:.05f}  "
+                            f"Lc: {train_avg_loss_c:.05f}  "
+                            f"D(x): {train_avg_D_x:.05f}  "
+                            f"D(x_hat): {train_avg_D_x_hat:.05f}  "
+                            f"D(x_hat_p): {train_avg_D_x_hat_p:.05f}")
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lse'.format(self.dataset_name, fold+1), train_avg_loss_s_e, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Ld'.format(self.dataset_name, fold+1), train_avg_loss_d, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lc'.format(self.dataset_name, fold+1), train_avg_loss_c, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x'.format(self.dataset_name, fold+1), train_avg_D_x, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat'.format(self.dataset_name, fold+1), train_avg_D_x_hat, epoch)
+            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat_p'.format(self.dataset_name, fold+1), train_avg_D_x_hat_p, epoch)
 
-            if epoch < self.pretrain_vae:
-                # Log VAE loss
-                train_avg_loss_vae = np.mean(train_avg_loss_vae)
-                self.log.info(f"Epoch: {epoch+1:3}/{self.hps.epochs:3}   Lvae: {train_avg_loss_vae:.05f}")
-            else:
-                # Log losses and probs for real and fake data by the end of the epoch
-                train_avg_loss_s_e = np.mean(train_avg_loss_s_e)
-                train_avg_loss_d = np.mean(train_avg_loss_d)
-                train_avg_loss_c = np.mean(train_avg_loss_c)
-                train_avg_D_x = np.mean(train_avg_D_x)
-                train_avg_D_x_hat = np.mean(train_avg_D_x_hat)
-                train_avg_D_x_hat_p = np.mean(train_avg_D_x_hat_p)
-                self.log.info(f"Epoch: {epoch+1:3}/{self.hps.epochs:3}   "
-                                f"Lse: {train_avg_loss_s_e:.05f}  "
-                                f"Ld: {train_avg_loss_d:.05f}  "
-                                f"Lc: {train_avg_loss_c:.05f}  "
-                                f"D(x): {train_avg_D_x:.05f}  "
-                                f"D(x_hat): {train_avg_D_x_hat:.05f}  "
-                                f"D(x_hat_p): {train_avg_D_x_hat_p:.05f}")
-                self.hps.writer.add_scalar('{}/Fold_{}/Train/Lse'.format(self.dataset_name, fold+1), train_avg_loss_s_e, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Train/Ld'.format(self.dataset_name, fold+1), train_avg_loss_d, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Train/Lc'.format(self.dataset_name, fold+1), train_avg_loss_c, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x'.format(self.dataset_name, fold+1), train_avg_D_x, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat'.format(self.dataset_name, fold+1), train_avg_D_x_hat, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat_p'.format(self.dataset_name, fold+1), train_avg_D_x_hat_p, epoch)
+            # Evaluate performances on test keys
+            if epoch % self.hps.test_every_epochs == 0:
+                avg_corr, (avg_f_score, max_f_score) = self.test(fold)
+                self.model.train()
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
+                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
+                best_avg_f_score = max(best_avg_f_score, avg_f_score)
+                best_max_f_score = max(best_max_f_score, max_f_score)
+                if avg_corr > best_corr:
+                    best_corr = avg_corr
+                    self.best_weights = self.model.state_dict()
 
-                # Evaluate performances on test keys
-                if epoch % self.hps.test_every_epochs == 0:
-                    avg_corr, (avg_f_score, max_f_score) = self.test(fold)
-                    self.model.train()
-                    self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
-                    self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
-                    self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
-                    best_avg_f_score = max(best_avg_f_score, avg_f_score)
-                    best_max_f_score = max(best_max_f_score, max_f_score)
-                    if avg_corr > best_corr:
-                        best_corr = avg_corr
-                        self.best_weights = self.model.state_dict()
-
-                # Free unused memory from GPU
-                torch.cuda.empty_cache()
+            # Free unused memory from GPU
+            torch.cuda.empty_cache()
 
         return best_corr, best_avg_f_score, best_max_f_score
 

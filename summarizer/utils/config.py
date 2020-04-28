@@ -15,6 +15,7 @@ from summarizer.models.vasnet import VASNetModel
 from summarizer.models.transformer import TransformerModel
 from summarizer.models.dsn import DSNModel
 from summarizer.models.sumgan import SumGANModel
+from summarizer.models.sumgan_att import SumGANAttModel
 
 
 class HParameters:
@@ -75,7 +76,8 @@ class HParameters:
                 "vasnet": VASNetModel,
                 "transformer": TransformerModel,
                 "dsn": DSNModel,
-                "sumgan": SumGANModel
+                "sumgan": SumGANModel,
+                "sumgan_att": SumGANAttModel
             }.get(args["model"], LogisticRegressionModel)
 
         # Other dynamic properties

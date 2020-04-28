@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch.distributions.bernoulli import Bernoulli
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
+from summarizer.models.sumgan import GAN
 
 """
 Upgraded version of SumGAN with Attention.
@@ -115,64 +116,12 @@ class Summarizer(nn.Module):
         x_hat = self.ae(x_weighted)
         return x_hat, scores
 
-class cLSTM(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
-        """Discriminator as a classifier LSTM"""
-        super(cLSTM, self).__init__()
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            bidirectional=False
-        )
-        self.out = nn.Sequential(
-            nn.Linear(hidden_size, 1),
-            nn.Sigmoid())
-
-    def forward(self, x):
-        """
-        Input 
-          x: (seq_len, batch_size, input_size)
-        Output
-          probs: (batch_size, 1)
-          h_last: (batch_size, hidden_size)
-        """
-        output, (_, _) = self.lstm(x)  # (seq_len, batch_size, hidden_size)
-        h_last = output[-1]            # (batch_size, hidden_size)
-        probs = self.out(h_last)       # (batch_size, 1)
-        return probs, h_last
-
-class GAN(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
-        """GAN: discriminator.
-        Args
-          input_size: size of the frame feature descriptor
-          hidden_size: hidden size of cLSTM
-          num_layers: number of layers of cLSTM
-        """
-        super(GAN, self).__init__()
-        self.c_lstm = cLSTM(
-          input_size=input_size,
-          hidden_size=hidden_size,
-          num_layers=num_layers)
-
-    def forward(self, x):
-        """
-        Input
-          x: (seq_len, batch_size, input_size)
-        Output
-          probs: (batch_size, 1)
-          h_last: (batch_size, hidden_size)
-        """
-        probs, h_last = self.c_lstm(x)
-        return probs, h_last
-
-class SumGAN(nn.Module):
+class SumGANAtt(nn.Module):
     def __init__(self, input_size=1024, s_encoder_layers=2, s_attention_heads=4, 
                         ae_encoder_layers=2, ae_attention_heads=4,
                         cLSTM_hidden_size=1024, cLSTM_num_layers=2):
         """SumGAN: Summarizer + GAN"""
-        super(SumGAN, self).__init__()
+        super(SumGANAtt, self).__init__()
         self.summarizer = Summarizer(
             input_size=input_size,
             s_encoder_layers=s_encoder_layers, s_attention_heads=s_attention_heads,
@@ -191,7 +140,7 @@ class SumGAN(nn.Module):
         return self.summarizer.selector(x)
 
 
-class SumGANModel(Model):
+class SumGANAttModel(Model):
     def _init_model(self):
         # SumGAN hyperparameters
         self.sigma = float(self.hps.extra_params.get("sigma", 0.3))
@@ -206,7 +155,7 @@ class SumGANModel(Model):
         self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 100))
 
         # Model
-        model = SumGAN(input_size=self.input_size,
+        model = SumGANAtt(input_size=self.input_size,
             s_encoder_layers=self.s_encoder_layers, s_attention_heads=self.s_attention_heads,
             ae_encoder_layers=self.ae_encoder_layers, ae_attention_heads=self.ae_attention_heads,
             cLSTM_hidden_size=self.cLSTM_hidden_size, cLSTM_num_layers=self.cLSTM_num_layers)

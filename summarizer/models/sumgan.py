@@ -185,7 +185,7 @@ class cLSTM(nn.Module):
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
-            bidirectional=True
+            bidirectional=False
         )
         self.out = nn.Sequential(
             nn.Linear(hidden_size, 1),
@@ -197,12 +197,12 @@ class cLSTM(nn.Module):
           x: (seq_len, batch_size, input_size)
         Output
           probs: (batch_size, 1)
-          h_last_top: (batch_size, hidden_size)
+          h_last: (batch_size, hidden_size)
         """
-        _, (h_last, _) = self.lstm(x) # (num_layers*2, batch_size, hidden_size)
-        h_last_top = h_last[-1]       # (batch_size, hidden_size)
-        probs = self.out(h_last_top)  # (batch_size, 1)
-        return probs, h_last_top
+        output, (_, _) = self.lstm(x)  # (seq_len, batch_size, hidden_size)
+        h_last = output[-1]            # (batch_size, hidden_size)
+        probs = self.out(h_last)       # (batch_size, 1)
+        return probs, h_last
 
 class GAN(nn.Module):
     def __init__(self, input_size=1024, hidden_size=1024, num_layers=2):
@@ -224,10 +224,10 @@ class GAN(nn.Module):
           x: (seq_len, batch_size, input_size)
         Output
           probs: (batch_size, 1)
-          h_last_top: (batch_size, hidden_size)
+          h_last: (batch_size, hidden_size)
         """
-        probs, h_last_top = self.c_lstm(x)
-        return probs, h_last_top
+        probs, h_last = self.c_lstm(x)
+        return probs, h_last
 
 class SumGAN(nn.Module):
     def __init__(self, input_size=1024, sLSTM_hidden_size=1024, sLSTM_num_layers=2, 

@@ -188,7 +188,7 @@ if __name__ == "__main__":
     print()
     print("Possible flags for Transformer:")
     print("encoder_layers: an integer describing the number of encoder layers to use in the transformer. Default=6")
-    print("encoder_layers: an integer describing the number of attention heads to use in the transformer. Default=8")
+    print("attention_heads: an integer describing the number of attention heads to use in the transformer. Default=8")
     print("max_pos: an integer describing the maximum length of a sequence (e.g. the number of frames in each video). Specify to use positional encodings. Default=None")
     print("more_residuals. Specify to add a residual connection between before and after the encoder layers. Default=False")
     print("max_pos: an integer describing the maximum length of a sequence (e.g. the number of frames in each video). Specify to use positional encodings. Default=None")

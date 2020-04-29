@@ -1,10 +1,28 @@
 [
     {
         "train_keys": [
-            "video_1"
+            "video_1",
+            "video_10",
+            "video_11",
+            "video_12",
+            "video_13",
+            "video_14",
+            "video_15",
+            "video_16",
+            "video_17",
+            "video_18"
         ],
         "test_keys": [
-            "video_1"
+            "video_1",
+            "video_10",
+            "video_11",
+            "video_12",
+            "video_13",
+            "video_14",
+            "video_15",
+            "video_16",
+            "video_17",
+            "video_18"
         ]
     }
 ]

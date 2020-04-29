@@ -39,7 +39,9 @@ class HParameters:
         # Split files to be trained/tested on
         self.splits_files = [
             "splits/tvsum_splits.json",
-            "splits/summe_splits.json"]
+            "splits/tvsum_splits_overfit.json",
+            "splits/summe_splits.json",
+            "splits/summe_splits_overfit.json"]
 
         # Default model
         self.model_class = LogisticRegressionModel

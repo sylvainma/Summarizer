@@ -339,9 +339,9 @@ class SumGANAttModel(Model):
                 x_hat, _ = self.model.summarizer(x)
                 x_hat_p, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
                 if epoch < self.epoch_noise:
-                    x = torch.rand_like(x) * x
-                    x_hat = x_hat * torch.rand_like(x_hat)
-                    x_hat_p = x_hat_p * torch.rand_like(x_hat_p)
+                    x = torch.randn_like(x) * x
+                    x_hat = x_hat * torch.randn_like(x_hat)
+                    x_hat_p = x_hat_p * torch.randn_like(x_hat_p)
                 probs_real, _ = self.model.gan(x)
                 probs_fake, _ = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)

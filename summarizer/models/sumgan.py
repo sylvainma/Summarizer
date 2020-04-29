@@ -266,6 +266,7 @@ class SumGANModel(Model):
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
         self.sup = bool(self.hps.extra_params.get("sup", False))
         self.pretrain_vae = int(self.hps.extra_params.get("pretrain_vae", 100))
+        self.epoch_noise = int(self.hps.extra_params.get("epoch_noise", 0.2*self.hps.epochs))
 
         # Model
         model = SumGAN(input_size=self.input_size,
@@ -297,13 +298,13 @@ class SumGANModel(Model):
 
     def loss_gan_generator(self, probs_fake, probs_uniform):
         """maximize E[log(cLSTM(x_hat))] + E[log(cLSTM(x_hat_p))]"""
-        label_real = torch.full_like(probs_fake, 1.0).to(probs_fake.device)
+        label_real = torch.full_like(probs_fake, 0.9).to(probs_fake.device)
         return self.loss_BCE(probs_fake, label_real) + self.loss_BCE(probs_uniform, label_real)
 
     def loss_gan_discriminator(self, probs_real, probs_fake, probs_uniform):
         """maximize E[log(cLSTM(x))] + E[log(1 - cLSTM(x_hat))] + E[log(1 - cLSTM(x_hat_p))]"""
-        label_real = torch.full_like(probs_real, 1.0).to(probs_real.device)
-        label_fake = torch.full_like(probs_fake, 0.0).to(probs_fake.device)
+        label_real = torch.full_like(probs_real, 0.9).to(probs_real.device)
+        label_fake = torch.full_like(probs_fake, 0.1).to(probs_fake.device)
         return self.loss_BCE(probs_real, label_real) + self.loss_BCE(probs_fake, label_fake) \
                     + self.loss_BCE(probs_uniform, label_fake)
 
@@ -451,8 +452,12 @@ class SumGANModel(Model):
                 # Discriminator update
                 ###############################
                 # Forward
-                x_hat, _, _ = self.model.summarizer(x)
-                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat, _, scores = self.model.summarizer(x)
+                x_hat_p, _, scores_uniform = self.model.summarizer(x, uniform=True, p=self.sigma)
+                if epoch < self.epoch_noise:
+                    x = torch.randn_like(x) * x
+                    x_hat = x_hat * torch.randn_like(x_hat)
+                    x_hat_p = x_hat_p * torch.randn_like(x_hat_p)
                 probs_real, _ = self.model.gan(x)
                 probs_fake, _ = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)

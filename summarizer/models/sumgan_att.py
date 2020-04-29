@@ -185,11 +185,11 @@ class SumGANAttModel(Model):
 
     def loss_gan_generator(self, probs_fake, probs_uniform):
         """maximize 0.5 * (cLSTM(x_hat) + cLSTM(x_hat_p))"""
-        return -0.5 * (probs_fake + probs_uniform)
+        return torch.mean(-0.5 * (probs_fake + probs_uniform))
 
     def loss_gan_discriminator(self, probs_real, probs_fake, probs_uniform):
         """maximize cLSTM(x) - 0.5 * (cLSTM(x_hat) + cLSTM(x_hat_p))"""
-        return -probs_real + 0.5 * (probs_fake + probs_uniform)
+        return torch.mean(-probs_real + 0.5 * (probs_fake + probs_uniform))
 
     def pretrain(self, fold):
         """Pretrain VAE before learning the GAN, as recommended in paper"""

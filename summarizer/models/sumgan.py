@@ -383,6 +383,9 @@ class SumGANModel(Model):
             train_avg_D_x = []
             train_avg_D_x_hat = []
             train_avg_D_x_hat_p = []
+            dist_gtscore = []
+            dist_scores = []
+            dist_scores_uniform = []
             random.shuffle(train_keys)
 
             # For each training video
@@ -472,6 +475,10 @@ class SumGANModel(Model):
                 train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
                 train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
                 train_avg_D_x_hat_p.append(torch.mean(probs_uniform).detach().cpu().numpy())
+                if batch_i == 0:
+                    dist_gtscore.append(y.detach().cpu().numpy())
+                    dist_scores.append(scores.detach().cpu().numpy())
+                    dist_scores_uniform.append(scores_uniform.detach().cpu().numpy())
 
             # Log losses and probs for real and fake data by the end of the epoch
             train_avg_loss_s_e = np.mean(train_avg_loss_s_e)
@@ -487,20 +494,25 @@ class SumGANModel(Model):
                             f"D(x): {train_avg_D_x:.05f}  "
                             f"D(x_hat): {train_avg_D_x_hat:.05f}  "
                             f"D(x_hat_p): {train_avg_D_x_hat_p:.05f}")
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lse'.format(self.dataset_name, fold+1), train_avg_loss_s_e, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Ld'.format(self.dataset_name, fold+1), train_avg_loss_d, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Lc'.format(self.dataset_name, fold+1), train_avg_loss_c, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x'.format(self.dataset_name, fold+1), train_avg_D_x, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat'.format(self.dataset_name, fold+1), train_avg_D_x_hat, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/D_x_hat_p'.format(self.dataset_name, fold+1), train_avg_D_x_hat_p, epoch)
+            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Lse', train_avg_loss_s_e, epoch)
+            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Ld', train_avg_loss_d, epoch)
+            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Lc', train_avg_loss_c, epoch)
+            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x', train_avg_D_x, epoch)
+            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat', train_avg_D_x_hat, epoch)
+            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat_p', train_avg_D_x_hat_p, epoch)
+
+            # Log the distribution of scores predicted by the selector
+            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_gtscore', np.array(dist_gtscore), epoch)
+            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_scores', np.array(dist_scores), epoch)
+            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_scores_uniform', np.array(dist_scores_uniform), epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
                 avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
+                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/Correlation', avg_corr, epoch)
+                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg', avg_f_score, epoch)
+                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/F-score_max', max_f_score, epoch)
                 best_avg_f_score = max(best_avg_f_score, avg_f_score)
                 best_max_f_score = max(best_max_f_score, max_f_score)
                 if avg_corr > best_corr:

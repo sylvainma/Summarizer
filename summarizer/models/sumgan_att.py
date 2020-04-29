@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions.bernoulli import Bernoulli
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
 from summarizer.models.sumgan import GAN
@@ -111,8 +110,7 @@ class Summarizer(nn.Module):
         """
         if uniform:
             seq_len, batch_size, _ = x.size()
-            dist = Bernoulli(torch.full((seq_len, batch_size, 1), p).to(x.device))
-            scores = dist.sample()
+            scores = torch.rand((seq_len, batch_size, 1)).to(x.device)
         else:
             scores = self.selector(x)
         
@@ -156,7 +154,7 @@ class SumGANAttModel(Model):
         self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
         self.sup = bool(self.hps.extra_params.get("sup", False))
-        self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 100))
+        self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 20))
         self.epoch_noise = int(self.hps.extra_params.get("epoch_noise", 0.2*self.hps.epochs))
 
         # Model
@@ -221,7 +219,7 @@ class SumGANAttModel(Model):
                 train_avg_loss_ae.append(float(loss_ae))
 
             # Log VAE loss
-            if epoch % 10 == 0:
+            if epoch % 10 == 0 or epoch == self.pretrain_ae-1:
                 train_avg_loss_ae = np.mean(train_avg_loss_ae)
                 self.log.info(f"Pretrain: {epoch+1:3}/{self.pretrain_ae:3}   Lae: {train_avg_loss_ae:.05f}")
 

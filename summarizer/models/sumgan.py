@@ -5,14 +5,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions.bernoulli import Bernoulli
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.models import Model
 
 """
 Unsupervised Video Summarization with Adversarial LSTM Networks
 http://web.engr.oregonstate.edu/~sinisa/research/publications/cvpr17_summarization.pdf
-https://github.com/j-min/Adversarial_Video_Summary
+Derivations from the paper:
+* Add label smoothing in GAN losses
+* Add noise to inputs of the discriminator (cLSTM)
+Problems with the paper:
+* Equation (5) pushes scores to be around sigma
+* Dimensions in "Implementations Details" are too high
+* s_p sampling is unclear: Uniform scores or Bernouilli sampling?
 """
 
 class sLSTM(nn.Module):
@@ -126,7 +131,7 @@ class VAE(nn.Module):
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
-        eps = torch.rand_like(std)
+        eps = torch.randn_like(std)
         return mu + eps * std
 
     def forward(self, x):
@@ -157,10 +162,11 @@ class Summarizer(nn.Module):
         self.s_lstm = sLSTM(input_size=input_size, hidden_size=sLSTM_hidden_size, num_layers=sLSTM_num_layers)
         self.vae = VAE(input_size=input_size, hidden_size=edLSTM_hidden_size, num_layers=edLSTM_num_layers)
 
-    def forward(self, x, uniform=False, p=0.3):
+    def forward(self, x, uniform=False):
         """
         Input 
           x: (seq_len, batch_size, input_size)
+          uniform: uniformly distributed random scores or not
         Output
           x_hat: (seq_len, batch_size, input_size)
           h_mu, h_logvar: (num_layers, batch_size, hidden_size)
@@ -168,8 +174,7 @@ class Summarizer(nn.Module):
         """
         if uniform:
             seq_len, batch_size, _ = x.size()
-            dist = Bernoulli(torch.full((seq_len, batch_size, 1), p).to(x.device))
-            scores = dist.sample()
+            scores = torch.rand((seq_len, batch_size, 1)).to(x.device)
         else:
             scores = self.s_lstm(x)
         
@@ -265,7 +270,7 @@ class SumGANModel(Model):
         self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
         self.sup = bool(self.hps.extra_params.get("sup", False))
-        self.pretrain_vae = int(self.hps.extra_params.get("pretrain_vae", 100))
+        self.pretrain_vae = int(self.hps.extra_params.get("pretrain_vae", 20))
         self.epoch_noise = int(self.hps.extra_params.get("epoch_noise", 0.2*self.hps.epochs))
 
         # Model
@@ -338,7 +343,7 @@ class SumGANModel(Model):
                 train_avg_loss_vae.append(float(loss_vae))
 
             # Log VAE loss
-            if epoch % 10 == 0:
+            if epoch % 10 == 0 or epoch == self.pretrain_vae-1:
                 train_avg_loss_vae = np.mean(train_avg_loss_vae)
                 self.log.info(f"Pretrain: {epoch+1:3}/{self.pretrain_vae:3}   Lvae: {train_avg_loss_vae:.05f}")
 
@@ -432,7 +437,7 @@ class SumGANModel(Model):
                 ###############################
                 # Forward
                 x_hat, _, _ = self.model.summarizer(x)
-                x_hat_p, _, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat_p, _, _ = self.model.summarizer(x, uniform=True)
                 _, h_real = self.model.gan(x)
                 probs_fake, h_fake = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)
@@ -453,7 +458,7 @@ class SumGANModel(Model):
                 ###############################
                 # Forward
                 x_hat, _, scores = self.model.summarizer(x)
-                x_hat_p, _, scores_uniform = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat_p, _, scores_uniform = self.model.summarizer(x, uniform=True)
                 if epoch < self.epoch_noise:
                     x = torch.randn_like(x) * x
                     x_hat = x_hat * torch.randn_like(x_hat)

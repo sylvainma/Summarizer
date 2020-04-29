@@ -60,16 +60,18 @@ class HParameters:
                 setattr(self, key, val)
 
         # Pick model
-        if "model" in args:
-            self.model_class = {
-                "random": RandomModel,
-                "logistic": LogisticRegressionModel,
-                "vasnet": VASNetModel,
-                "transformer": TransformerModel,
-                "dsn": DSNModel,
-                "sumgan": SumGANModel,
-                "sumgan_att": SumGANAttModel
-            }.get(args["model"], LogisticRegressionModel)
+        self.model_class = {
+            "random": RandomModel,
+            "logistic": LogisticRegressionModel,
+            "vasnet": VASNetModel,
+            "transformer": TransformerModel,
+            "dsn": DSNModel,
+            "sumgan": SumGANModel,
+            "sumgan_att": SumGANAttModel,
+            None: RandomModel
+        }.get(args["model"], None)
+        if self.model_class is None:
+            raise KeyError(f"{args['model']} model is not unknown")
 
         # Other dynamic properties
         self._init()

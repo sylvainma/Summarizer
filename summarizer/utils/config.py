@@ -34,14 +34,16 @@ class HParameters:
         # Project root directory
         self.datasets = [
             "datasets/summarizer_dataset_summe_google_pool5.h5",
-            "datasets/summarizer_dataset_tvsum_google_pool5.h5"]
+            "datasets/summarizer_dataset_tvsum_google_pool5.h5",
+            "datasets/summarizer_dataset_LOL_google_pool5.h5"]
 
         # Split files to be trained/tested on
         self.splits_files = [
             "splits/tvsum_splits.json",
             "splits/tvsum_splits_overfit.json",
             "splits/summe_splits.json",
-            "splits/summe_splits_overfit.json"]
+            "splits/summe_splits_overfit.json",
+            "splits/LOL_splits.json"]
 
         # Default model
         self.model_class = LogisticRegressionModel

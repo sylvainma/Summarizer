@@ -12,7 +12,8 @@ def download_datasets():
     datasets_path = osp.dirname(osp.abspath(__file__))
     datasets = [
         ("summarizer_dataset_summe_google_pool5.h5", "1LUcnvGpGzt5X59-x72N02k-zXm5dt9Hn"),
-        ("summarizer_dataset_tvsum_google_pool5.h5", "1Ur-q0O9gi-VgBLNM7X8bdhSkcoI-CrnC")]
+        ("summarizer_dataset_tvsum_google_pool5.h5", "1Ur-q0O9gi-VgBLNM7X8bdhSkcoI-CrnC"),
+        ("summarizer_dataset_LOL_google_pool5.h5", "1suaESy2yxuCshcLFN-7IjmtvEXOL4nrV")]
     
     for dst, fid in datasets:
         path = osp.join(datasets_path, dst)

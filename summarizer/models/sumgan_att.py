@@ -145,16 +145,15 @@ class SumGANAtt(nn.Module):
 class SumGANAttModel(Model):
     def _init_model(self):
         # SumGAN hyperparameters
-        self.sigma = float(self.hps.extra_params.get("sigma", 0.3))
         self.input_size = int(self.hps.extra_params.get("input_size", 1024))
         self.s_encoder_layers = int(self.hps.extra_params.get("s_encoder_layers", 2))
         self.s_attention_heads = int(self.hps.extra_params.get("s_attention_heads", 4))
         self.ae_encoder_layers = int(self.hps.extra_params.get("ae_encoder_layers", 2))
         self.ae_attention_heads = int(self.hps.extra_params.get("ae_attention_heads", 4))
-        self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 1024))
+        self.cLSTM_hidden_size = int(self.hps.extra_params.get("cLSTM_hidden_size", 256))
         self.cLSTM_num_layers = int(self.hps.extra_params.get("cLSTM_num_layers", 2))
-        self.sup = bool(self.hps.extra_params.get("sup", False))
-        self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 20))
+        self.sup = bool(self.hps.extra_params.get("sup", True))
+        self.pretrain_ae = int(self.hps.extra_params.get("pretrain_ae", 80))
         self.epoch_noise = int(self.hps.extra_params.get("epoch_noise", 0.2*self.hps.epochs))
 
         # Model
@@ -163,6 +162,10 @@ class SumGANAttModel(Model):
             ae_encoder_layers=self.ae_encoder_layers, ae_attention_heads=self.ae_attention_heads,
             cLSTM_hidden_size=self.cLSTM_hidden_size, cLSTM_num_layers=self.cLSTM_num_layers)
         
+        # Parameters
+        self.log.debug("Generator params: {}".format(sum([_.numel() for _ in model.summarizer.parameters()])))
+        self.log.debug("Discriminator params: {}".format(sum([_.numel() for _ in model.gan.parameters()])))
+
         return model
 
     def loss_ae(self, x, x_hat):
@@ -173,9 +176,9 @@ class SumGANAttModel(Model):
         """minimize E[l2_norm(phi(x) - phi(x_hat))]"""
         return torch.norm(h_real - h_fake, p=2)
 
-    def loss_sparsity(self, scores, sigma):
-        """minimize l2_norm(E[s_t] - sigma)"""
-        return torch.abs(torch.mean(scores) - sigma)
+    def loss_sparsity(self, scores):
+        """TODO: loss penalizing prediction of the same scores"""
+        return torch.tensor(0)
 
     def loss_sparsity_sup(self, scores, gtscores):
         """minimize BCE(scores, gtscores)"""
@@ -190,11 +193,11 @@ class SumGANAttModel(Model):
         return torch.mean(-probs_real + 0.5 * (probs_fake + probs_uniform))
 
     def pretrain(self, fold):
-        """Pretrain VAE before learning the GAN, as recommended in paper"""
+        """Pretrain autoencoder before learning the GAN"""
         train_keys, _ = self._get_train_test_keys(fold)
         ae_optimizer = torch.optim.Adam(
             self.model.summarizer.ae.parameters(),
-            lr=self.hps.lr,
+            lr=self.hps.lr * 10.0,
             weight_decay=self.hps.l2_req)
 
         for epoch in range(self.pretrain_ae):
@@ -209,7 +212,7 @@ class SumGANAttModel(Model):
                 if self.hps.use_cuda:
                     x = x.cuda()
                 
-                # Pretrain the lstm VAE
+                # Pretrain the Transformer Autoencoder
                 x_hat = self.model.summarizer.ae(x)
                 loss_ae = self.loss_ae(x, x_hat)
                 ae_optimizer.zero_grad()
@@ -246,7 +249,7 @@ class SumGANAttModel(Model):
             + list(self.model.summarizer.ae.transformer_decoder_layer.parameters()),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
-        self.c_optimizer = torch.optim.SGD(
+        self.c_optimizer = torch.optim.Adam(
             self.model.gan.c_lstm.parameters(),
             lr=self.hps.lr,
             weight_decay=self.hps.l2_req)
@@ -300,7 +303,7 @@ class SumGANAttModel(Model):
                 if self.sup:
                     loss_sparsity = self.loss_sparsity_sup(scores, y)
                 else:
-                    loss_sparsity = self.loss_sparsity(scores, self.sigma)
+                    loss_sparsity = self.loss_sparsity(scores)
                 loss_s_e = loss_recons + loss_sparsity
 
                 # Update
@@ -314,7 +317,7 @@ class SumGANAttModel(Model):
                 ###############################
                 # Forward
                 x_hat, _ = self.model.summarizer(x)
-                x_hat_p, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat_p, _ = self.model.summarizer(x, uniform=True)
                 _, h_real = self.model.gan(x)
                 probs_fake, h_fake = self.model.gan(x_hat)
                 probs_uniform, _ = self.model.gan(x_hat_p)
@@ -334,8 +337,8 @@ class SumGANAttModel(Model):
                 # Discriminator update
                 ###############################
                 # Forward
-                x_hat, _ = self.model.summarizer(x)
-                x_hat_p, _ = self.model.summarizer(x, uniform=True, p=self.sigma)
+                x_hat, scores = self.model.summarizer(x)
+                x_hat_p, scores_uniform = self.model.summarizer(x, uniform=True)
                 if epoch < self.epoch_noise:
                     x = torch.randn_like(x) * x
                     x_hat = x_hat * torch.randn_like(x_hat)
@@ -413,23 +416,4 @@ class SumGANAttModel(Model):
 
 
 if __name__ == "__main__":
-    model = SumGAN()
-    print("Parameters:", sum([_.numel() for _ in model.parameters()]))
-
-    model = Summarizer()
-    x = torch.randn(10, 3, 1024)
-    x_hat, scores = model(x)
-    print(x.shape, x_hat.shape, scores.shape)
-    assert x.shape[0] == scores.shape[0]
-    assert x.shape[1] == scores.shape[1]
-    assert scores.shape[2] == 1
-    assert x.shape[0] == x_hat.shape[0]
-    assert x.shape[1] == x_hat.shape[1]
-    assert x.shape[2] == x_hat.shape[2]
-
-    model = GAN()
-    x = torch.randn(10, 3, 1024)
-    probs, h = model(x)
-    print(x.shape, probs.shape)
-    assert x.shape[1] == probs.shape[0]
-    assert probs.shape[1] == 1
+    pass

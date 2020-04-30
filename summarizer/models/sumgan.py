@@ -278,6 +278,10 @@ class SumGANModel(Model):
             sLSTM_hidden_size=self.sLSTM_hidden_size, sLSTM_num_layers=self.sLSTM_num_layers,
             edLSTM_hidden_size=self.edLSTM_hidden_size, edLSTM_num_layers=self.edLSTM_num_layers,
             cLSTM_hidden_size=self.cLSTM_hidden_size, cLSTM_num_layers=self.cLSTM_num_layers)
+
+        # Parameters
+        self.log.debug("Generator params: {}".format(sum([_.numel() for _ in model.summarizer.parameters()])))
+        self.log.debug("Discriminator params: {}".format(sum([_.numel() for _ in model.gan.parameters()])))
         
         return model
 

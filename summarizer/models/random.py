@@ -28,9 +28,17 @@ class RandomModel(Model):
         model = Random()
         return model
 
+    def draw_scores(self, keys):
+        for i, key in enumerate(keys):
+            d = self.dataset[key]
+            video_name = d["video_name"][...]
+            gtscore = d["gtscore"][...]
+            self.hps.writer.add_histogram(f"{self.dataset_name}/dist_gtscore", gtscore, i)
+
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
+        self.draw_scores(train_keys)
 
         criterion = nn.MSELoss()
         if self.hps.use_cuda:

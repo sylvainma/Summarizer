@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Simple Logistic Regression.
@@ -35,7 +35,7 @@ class LogisticRegression(nn.Module):
         return scores
 
 
-class LogisticRegressionModel(Model):
+class LogisticRegressionTrainer(Trainer):
     def _init_model(self):
         model = LogisticRegression()
         return model

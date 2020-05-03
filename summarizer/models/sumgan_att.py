@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 from summarizer.models.sumgan import GAN
 
 """
@@ -142,7 +142,7 @@ class SumGANAtt(nn.Module):
         return self.summarizer.selector(x)
 
 
-class SumGANAttModel(Model):
+class SumGANAttTrainer(Trainer):
     def _init_model(self):
         # SumGAN hyperparameters
         self.input_size = int(self.hps.extra_params.get("input_size", 1024))

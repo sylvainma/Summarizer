@@ -9,13 +9,13 @@ from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils import parse_splits_filename
-from summarizer.models.rand import RandomModel
-from summarizer.models.logistic import LogisticRegressionModel
-from summarizer.models.vasnet import VASNetModel
-from summarizer.models.transformer import TransformerModel
-from summarizer.models.dsn import DSNModel
-from summarizer.models.sumgan import SumGANModel
-from summarizer.models.sumgan_att import SumGANAttModel
+from summarizer.models.rand import RandomTrainer
+from summarizer.models.logistic import LogisticRegressionTrainer
+from summarizer.models.vasnet import VASNetTrainer
+from summarizer.models.transformer import TransformerTrainer
+from summarizer.models.dsn import DSNTrainer
+from summarizer.models.sumgan import SumGANTrainer
+from summarizer.models.sumgan_att import SumGANAttTrainer
 
 
 class HParameters:
@@ -46,7 +46,7 @@ class HParameters:
             "splits/LOL_splits.json"]
 
         # Default model
-        self.model_class = LogisticRegressionModel
+        self.model_class = LogisticRegressionTrainer
 
         # Dict containing extra parameters, possibly model-specific
         self.extra_params = None
@@ -65,14 +65,14 @@ class HParameters:
 
         # Pick model
         self.model_class = {
-            "random": RandomModel,
-            "logistic": LogisticRegressionModel,
-            "vasnet": VASNetModel,
-            "transformer": TransformerModel,
-            "dsn": DSNModel,
-            "sumgan": SumGANModel,
-            "sumgan_att": SumGANAttModel,
-            None: RandomModel
+            "random": RandomTrainer,
+            "logistic": LogisticRegressionTrainer,
+            "vasnet": VASNetTrainer,
+            "transformer": TransformerTrainer,
+            "dsn": DSNTrainer,
+            "sumgan": SumGANTrainer,
+            "sumgan_att": SumGANAttTrainer,
+            None: RandomTrainer
         }.get(args["model"], None)
         if self.model_class is None:
             raise KeyError(f"{args['model']} model is not unknown")

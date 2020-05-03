@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Summarizing Videos with Attention
@@ -148,7 +148,7 @@ class VASNet(nn.Module):
         return y
 
 
-class VASNetModel(Model):
+class VASNetTrainer(Trainer):
     def _init_model(self):
         model = VASNet(
             max_length=int(self.hps.extra_params["max_pos"]) if "max_pos" in self.hps.extra_params else None,

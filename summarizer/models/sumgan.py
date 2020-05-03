@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Unsupervised Video Summarization with Adversarial LSTM Networks
@@ -258,7 +258,7 @@ class SumGAN(nn.Module):
         return self.summarizer.s_lstm(x)
 
 
-class SumGANModel(Model):
+class SumGANTrainer(Trainer):
     def _init_model(self):
         # SumGAN hyperparameters
         self.sigma = float(self.hps.extra_params.get("sigma", 0.3))

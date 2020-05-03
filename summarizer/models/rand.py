@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Random scores as a baseline for comparison.
@@ -28,7 +28,7 @@ class Random(nn.Module):
         scores = scores.to(x.device)
         return scores
 
-class RandomModel(Model):
+class RandomTrainer(Trainer):
     def _init_model(self):
         model = Random()
         return model

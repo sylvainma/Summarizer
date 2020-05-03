@@ -6,7 +6,7 @@ import torch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.vsum_tools import generate_summary, evaluate_summary, generate_scores, evaluate_scores
 
-class Model:
+class Trainer:
     """Abstract class handling the training process"""
     def __init__(self, hps, splits_file):
         self.hps = hps

@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Bernoulli
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Deep Reinforcement Learning for Unsupervised Video Summarization with Diversity-Representativeness Reward
@@ -47,7 +47,7 @@ class DSN(nn.Module):
         return probs
 
 
-class DSNModel(Model):
+class DSNTrainer(Trainer):
     def _init_model(self):
         self.beta = int(self.hps.extra_params.get("beta", 0.01))
         self.num_episodes = int(self.hps.extra_params.get("num_episodes", 5))

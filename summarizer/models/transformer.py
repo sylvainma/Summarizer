@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Attention Is All You Need
@@ -103,7 +103,7 @@ class Transformer(nn.Module):
         return y
 
 
-class TransformerModel(Model):
+class TransformerTrainer(Trainer):
     def _init_model(self):
         model = Transformer(
             encoder_layers=int(self.hps.extra_params.get("encoder_layers", 6)),

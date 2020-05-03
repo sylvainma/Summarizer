@@ -14,14 +14,13 @@ Random scores as a baseline for comparison.
 
 class Random(nn.Module):
     def __init__(self):
-        """Baseline model predicting random scores"""
         super(Random, self).__init__()
 
     def forward(self, x):
-        y = torch.rand(np.prod(x.shape[:2]))
-        y = y.view(*x.shape[:2])
-        y = y.to(x.device)
-        return y
+        seq_len, batch_size, _ = x.shape
+        scores = torch.rand((seq_len, batch_size, 1))
+        scores = scores.to(x.device)
+        return scores
 
 class RandomModel(Model):
     def _init_model(self):
@@ -55,10 +54,10 @@ class RandomModel(Model):
             # For each training video
             for key in train_keys:
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
-                target = dataset['gtscore'][...]
-                target = torch.from_numpy(target).unsqueeze(0)
+                seq = dataset["features"][...]
+                seq = torch.from_numpy(seq).unsqueeze(1)
+                target = dataset["gtscore"][...]
+                target = torch.from_numpy(target).view(-1, 1, 1)
 
                 # Normalize frame scores
                 target -= target.min()
@@ -67,9 +66,8 @@ class RandomModel(Model):
                 if self.hps.use_cuda:
                     seq, target = seq.cuda(), target.cuda()
 
-                y = self.model(seq)
-
-                loss = criterion(y, target)
+                scores = self.model(seq)
+                loss = criterion(scores, target)
                 train_avg_loss.append(float(loss))
 
             # Average training loss value of epoch

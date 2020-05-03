@@ -16,15 +16,23 @@ https://github.com/KaiyangZhou/pytorch-vsumm-reinforce
 
 class DSN(nn.Module):
     """Deep Summarization Network"""
-    def __init__(self, in_dim=1024, hid_dim=256, num_layers=1, cell='lstm'):
+    def __init__(self, input_size=1024, hidden_size=256, num_layers=1, cell="lstm"):
         super(DSN, self).__init__()
-        assert cell in ['lstm', 'gru'], "cell must be either 'lstm' or 'gru'"
-        if cell == 'lstm':
-            self.rnn = nn.LSTM(in_dim, hid_dim, num_layers=num_layers, bidirectional=True, batch_first=True)
+        assert cell in ["lstm", "gru"], "cell must be either 'lstm' or 'gru'"
+        if cell == "lstm":
+            self.rnn = nn.LSTM(
+                input_size,
+                hidden_size,
+                num_layers=num_layers,
+                bidirectional=True)
         else:
-            self.rnn = nn.GRU(in_dim, hid_dim, num_layers=num_layers, bidirectional=True, batch_first=True)
+            self.rnn = nn.GRU(
+                input_size,
+                hidden_size,
+                num_layers=num_layers,
+                bidirectional=True)
         self.out = nn.Sequential(
-            nn.Linear(hid_dim * 2, 1),
+            nn.Linear(hidden_size*2, 1),
             nn.Sigmoid())
 
     def forward(self, x):
@@ -63,7 +71,7 @@ class DSNModel(Model):
             loss_BCE.cuda()
 
         # Baseline rewards for videos
-        baselines = {key: 0. for key in train_keys} 
+        baselines = {key: 0. for key in train_keys}
 
         # Record reward changes for each video across epochs
         reward_writers = {key: [] for key in train_keys}
@@ -79,17 +87,17 @@ class DSNModel(Model):
             # For each training video
             for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, dim)
-                y = dataset["gtscore"][...]
-                y = torch.from_numpy(y).view(-1, 1, 1) # (seq_len, 1, 1)
+                seq = dataset["features"][...]
+                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, input_size)
+                target = dataset["gtscore"][...]
+                target = torch.from_numpy(target).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
-                y -= y.min()
-                y /= y.max()
+                target -= target.min()
+                target /= target.max()
 
                 if self.hps.use_cuda: 
-                    seq, y = seq.cuda(), y.cuda()
+                    seq, target = seq.cuda(), target.cuda()
                 
                 # Score probabilities from the RNN
                 probs = self.model(seq)
@@ -100,7 +108,7 @@ class DSNModel(Model):
 
                 # Extension to supervised learning (neg-MLE <=> BCE)
                 if self.sup:
-                    loss += loss_BCE(probs, y)
+                    loss += loss_BCE(probs, target)
                 
                 # Run episodes
                 epis_rewards = []

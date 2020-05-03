@@ -90,14 +90,15 @@ class VASNet(nn.Module):
 
 
     def forward(self, x):
-        batch_size, seq_len, feature_dim = x.shape
+        seq_len, batch_size, feature_dim = x.shape
+        x = x.permute(1, 0, 2) # (batch_size, seq_len, feature_dim)
 
         negative_inf = float('-inf')
 
         assert self.feature_dim == feature_dim
 
         if self.max_length is not None:
-            assert self.max_length >= seq_len
+            assert self.max_length >= seq_len, "input sequence has higher length than max_length"
             if self.pos_embed_type == "simple":
                 pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
                 x += self.pos_embed(pos_tensor)
@@ -136,8 +137,8 @@ class VASNet(nn.Module):
         y = self.layer_norm(y)
         y = self.k2(y)
         y = self.sigmoid(y)
-        y = y.view(batch_size, -1)
-
+        
+        y = y.permute(1, 0, 2) # (seq_len, batch_size, 1)
         return y
 
 
@@ -183,10 +184,10 @@ class VASNetModel(Model):
             # For each training video
             for key in train_keys:
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
-                target = dataset['gtscore'][...]
-                target = torch.from_numpy(target).unsqueeze(0)
+                seq = dataset["features"][...]
+                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, input_size)
+                target = dataset["gtscore"][...]
+                target = torch.from_numpy(target).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
                 target -= target.min()
@@ -195,9 +196,9 @@ class VASNetModel(Model):
                 if self.hps.use_cuda:
                     seq, target = seq.cuda(), target.cuda()
 
-                y = self.model(seq)
+                scores = self.model(seq)
 
-                loss = criterion(y, target)
+                loss = criterion(scores, target)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()

@@ -13,18 +13,26 @@ Simple Logistic Regression.
 """
 
 class LogisticRegression(nn.Module):
-    def __init__(self, input_dim=1024):
+    def __init__(self, input_size=1024):
         super(LogisticRegression, self).__init__()
-        self.input_dim = input_dim
-        self.perceptron = nn.Linear(input_dim, 1)
+        self.input_size = input_size
+        self.perceptron = nn.Linear(input_size, 1)
         self.sig = nn.Sigmoid()
 
     def forward(self, x):
-        x = x.view(-1, self.input_dim) # (1,D,T) => (T,D)
-        x = self.perceptron(x)
-        y = self.sig(x)
-        y = y.view(1, -1) # (T,1) => (1,T)
-        return y
+        """Each time step is predicted individually.
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          scores: (seq_len, batch_size, 1)
+        """
+        seq_len, batch_size, input_size = x.shape
+        assert self.input_size == input_size
+        x = x.view(-1, input_size) # (seq_len*batch_size, input_size)
+        x = self.perceptron(x)     # (seq_len*batch_size, 1)
+        scores = self.sig(x)
+        scores = scores.view(seq_len, batch_size, 1)
+        return scores
 
 
 class LogisticRegressionModel(Model):
@@ -56,10 +64,10 @@ class LogisticRegressionModel(Model):
             # For each training video
             for key in train_keys:
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
-                target = dataset['gtscore'][...]
-                target = torch.from_numpy(target).unsqueeze(0)
+                seq = dataset["features"][...]
+                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, input_size)
+                target = dataset["gtscore"][...]
+                target = torch.from_numpy(target).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
                 target -= target.min()
@@ -68,9 +76,9 @@ class LogisticRegressionModel(Model):
                 if self.hps.use_cuda:
                     seq, target = seq.cuda(), target.cuda()
 
-                y = self.model(seq)
+                scores = self.model(seq) # (seq_len, 1, 1)
 
-                loss = criterion(y, target)
+                loss = criterion(scores, target)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -99,10 +107,12 @@ class LogisticRegressionModel(Model):
 
 
 if __name__ == "__main__":
-    D, T = 1024, 300
-    seq = torch.rand(1, D, T)
-    target = torch.rand(T)
+    seq_len, input_size = 300, 1024
+    seq = torch.rand((seq_len, 1, input_size))
+    target = torch.rand(seq_len).view(-1, 1, 1)
     model = LogisticRegression()
-    y = model(seq)
-    assert y.shape[1] == T, f"{y.shape} wrong shape"
-    print((y - target).mean().item())
+    scores = model(seq)
+    assert scores.shape[0] == seq_len, f"{scores.shape} wrong shape"
+    assert scores.shape[1] == 1, f"{scores.shape} wrong shape"
+    assert scores.shape[2] == 1, f"{scores.shape} wrong shape"
+    print((scores - target).mean().item())

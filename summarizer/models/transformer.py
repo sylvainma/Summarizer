@@ -70,17 +70,18 @@ class Transformer(nn.Module):
                 init.xavier_uniform_(self.k2.weight)
 
     def forward(self, x):
-        batch_size, seq_len, feature_dim = x.shape
+        seq_len, batch_size, feature_dim = x.shape
+        x = x.permute(1, 0, 2) # (batch_size, seq_len, feature_dim)
 
         if self.max_length is not None:
-            assert self.max_length >= seq_len
+            assert self.max_length >= seq_len, "input sequence has higher length than max_length"
             if self.pos_embed_type == "simple":
                 pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
                 x += self.pos_embed(pos_tensor)
             elif self.pos_embed_type == "attention":
                 x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, feature_dim).to(x.device)
 
-        x = x.view(seq_len, batch_size, feature_dim)
+        x = x.permute(1, 0, 2) # (seq_len, batch_size, feature_dim)
         encoder_out = self.transformer_encoder.forward(x)
         
         if self.more_residuals:
@@ -92,7 +93,6 @@ class Transformer(nn.Module):
         y = self.layer_norm(y)
         y = self.k2(y)
         y = self.sigmoid(y)
-        y = y.view(batch_size, -1)
 
         return y
 
@@ -139,10 +139,10 @@ class TransformerModel(Model):
             # For each training video
             for key in train_keys:
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(0)
-                target = dataset['gtscore'][...]
-                target = torch.from_numpy(target).unsqueeze(0)
+                seq = dataset["features"][...]
+                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, input_size)
+                target = dataset["gtscore"][...]
+                target = torch.from_numpy(target).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
                 target -= target.min()
@@ -151,9 +151,9 @@ class TransformerModel(Model):
                 if self.hps.use_cuda:
                     seq, target = seq.cuda(), target.cuda()
 
-                y = self.model(seq)
+                scores = self.model(seq)
 
-                loss = criterion(y, target)
+                loss = criterion(scores, target)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -200,3 +200,4 @@ if __name__ == "__main__":
     y = model(x)
     assert x.shape[0] == y.shape[0]
     assert x.shape[1] == y.shape[1]
+    assert y.shape[2] == 1

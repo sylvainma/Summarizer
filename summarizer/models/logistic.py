@@ -107,12 +107,11 @@ class LogisticRegressionModel(Model):
 
 
 if __name__ == "__main__":
-    seq_len, input_size = 300, 1024
-    seq = torch.rand((seq_len, 1, input_size))
-    target = torch.rand(seq_len).view(-1, 1, 1)
     model = LogisticRegression()
-    scores = model(seq)
-    assert scores.shape[0] == seq_len, f"{scores.shape} wrong shape"
-    assert scores.shape[1] == 1, f"{scores.shape} wrong shape"
-    assert scores.shape[2] == 1, f"{scores.shape} wrong shape"
-    print((scores - target).mean().item())
+    print("Trainable parameters in model:", sum([_.numel() for _ in model.parameters() if _.requires_grad]))
+
+    x = torch.randn(10, 3, 1024)
+    y = model(x)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[1] == y.shape[1]
+    assert y.shape[2] == 1

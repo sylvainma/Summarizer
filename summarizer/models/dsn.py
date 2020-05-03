@@ -224,4 +224,11 @@ class DSNModel(Model):
 
 
 if __name__ == "__main__":
-    pass
+    model = DSN()
+    print("Trainable parameters in model:", sum([_.numel() for _ in model.parameters() if _.requires_grad]))
+
+    x = torch.randn(10, 3, 1024)
+    y = model(x)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[1] == y.shape[1]
+    assert y.shape[2] == 1

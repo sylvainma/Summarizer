@@ -244,3 +244,4 @@ if __name__ == "__main__":
     y = model(x)
     assert x.shape[0] == y.shape[0]
     assert x.shape[1] == y.shape[1]
+    assert y.shape[2] == 1

@@ -285,7 +285,7 @@ class SumGANAttTrainer(Trainer):
 
                 # Normalize frame scores
                 y -= y.min()
-                y /= y.max()
+                y /= y.max() - y.min()
 
                 if self.hps.use_cuda:
                     x, y = x.cuda(), y.cuda()

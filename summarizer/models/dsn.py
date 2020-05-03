@@ -100,7 +100,7 @@ class DSNTrainer(Trainer):
 
                 # Normalize frame scores
                 target -= target.min()
-                target /= target.max()
+                target /= target.max() - target.min()
 
                 if self.hps.use_cuda: 
                     seq, target = seq.cuda(), target.cuda()

@@ -36,6 +36,12 @@ class DSN(nn.Module):
             nn.Sigmoid())
 
     def forward(self, x):
+        """Pass the input video through the LSTM.
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          probs: (seq_len, batch_size, 1)
+        """
         h, _ = self.rnn(x)
         probs = self.out(h)
         return probs
@@ -172,7 +178,7 @@ class DSNModel(Model):
     def compute_reward(self, seq, actions, far_sim=False, temp_dist_thre=20):
         """Compute diversity reward and representativeness reward
         Args:
-            seq: sequence of features, shape (seq_len, 1, dim)
+            seq: sequence of features, shape (seq_len, 1, input_size)
             actions: binary action sequence, shape (seq_len, 1, 1)
             far_sim (bool): whether to use temporally distant similarity (default: False)
             temp_dist_thre (int): threshold for ignoring temporally distant similarity (default: 20)
@@ -210,7 +216,7 @@ class DSNModel(Model):
             reward_div = dissim_submat.sum() / (num_picks * (num_picks - 1.))
 
         # Compute representativeness reward [Eq.5]
-        dist_mat = torch.pow(_seq, 2).sum(dim=1, keepdim=True).expand(T, T) # (T, T)
+        dist_mat = torch.pow(_seq, 2).sum(dim=1, keepdim=True).expand(T, T)
         dist_mat = dist_mat + dist_mat.t()
         dist_mat.addmm_(1, -2, _seq, _seq.t())
         dist_mat = dist_mat[:,pick_idxs]

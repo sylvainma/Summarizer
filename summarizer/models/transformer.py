@@ -16,12 +16,12 @@ https://pytorch.org/docs/stable/_modules/torch/nn/modules/transformer.html#Trans
 """
 
 class Transformer(nn.Module):
-    def __init__(self, feature_dim=1024, encoder_layers=6, attention_heads=8, more_residuals=False, max_length=None, pos_embed="simple", epsilon=1e-5, weight_init=None):
+    def __init__(self, input_size=1024, encoder_layers=6, attention_heads=8, more_residuals=False, max_length=None, pos_embed="simple", epsilon=1e-5, weight_init=None):
         super(Transformer, self).__init__()
 
         # feature dimension that is the the dimensionality of the key, query and value vectors
         # as well as the hidden dimension for the FF layers
-        self.feature_dim = feature_dim
+        self.input_size = input_size
 
         # Optional positional embeddings
         self.max_length = max_length
@@ -29,13 +29,13 @@ class Transformer(nn.Module):
             self.pos_embed_type = pos_embed
 
             if self.pos_embed_type == "simple":
-                self.pos_embed = torch.nn.Embedding(self.max_length, self.feature_dim)
+                self.pos_embed = torch.nn.Embedding(self.max_length, self.input_size)
             elif self.pos_embed_type == "attention":
-                self.pos_embed = torch.zeros(self.max_length, self.feature_dim)
+                self.pos_embed = torch.zeros(self.max_length, self.input_size)
                 for pos in np.arange(self.max_length):
-                    for i in np.arange(0, self.feature_dim, 2):
-                        self.pos_embed[pos, i] = np.sin(pos / (10000 ** ((2 * i)/self.feature_dim)))
-                        self.pos_embed[pos, i + 1] = np.cos(pos / (10000 ** ((2 * (i + 1))/self.feature_dim)))
+                    for i in np.arange(0, self.input_size, 2):
+                        self.pos_embed[pos, i] = np.sin(pos / (10000 ** ((2 * i)/self.input_size)))
+                        self.pos_embed[pos, i + 1] = np.cos(pos / (10000 ** ((2 * (i + 1))/self.input_size)))
             else:
                 self.max_length = None
 
@@ -44,13 +44,13 @@ class Transformer(nn.Module):
 
         # Common steps
         self.dropout = nn.Dropout(0.5)
-        self.layer_norm = torch.nn.LayerNorm(self.feature_dim, epsilon)
+        self.layer_norm = torch.nn.LayerNorm(self.input_size, epsilon)
 
-        self.transformer_encoder_layer = nn.TransformerEncoderLayer(d_model=feature_dim, nhead=attention_heads, dim_feedforward=self.feature_dim, dropout=0.1, activation='relu')
+        self.transformer_encoder_layer = nn.TransformerEncoderLayer(d_model=input_size, nhead=attention_heads, dim_feedforward=self.input_size, dropout=0.1, activation='relu')
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer=self.transformer_encoder_layer, num_layers=encoder_layers, norm=self.layer_norm)
 
-        self.k1 = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim)
-        self.k2 = nn.Linear(in_features=self.feature_dim, out_features=1)
+        self.k1 = nn.Linear(in_features=self.input_size, out_features=self.input_size)
+        self.k2 = nn.Linear(in_features=self.input_size, out_features=1)
         self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
 
@@ -70,8 +70,14 @@ class Transformer(nn.Module):
                 init.xavier_uniform_(self.k2.weight)
 
     def forward(self, x):
-        seq_len, batch_size, feature_dim = x.shape
-        x = x.permute(1, 0, 2) # (batch_size, seq_len, feature_dim)
+        """
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          y: (seq_len, batch_size, 1)
+        """
+        seq_len, batch_size, input_size = x.shape
+        x = x.permute(1, 0, 2) # (batch_size, seq_len, input_size)
 
         if self.max_length is not None:
             assert self.max_length >= seq_len, "input sequence has higher length than max_length"
@@ -79,9 +85,9 @@ class Transformer(nn.Module):
                 pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
                 x += self.pos_embed(pos_tensor)
             elif self.pos_embed_type == "attention":
-                x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, feature_dim).to(x.device)
+                x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, input_size).to(x.device)
 
-        x = x.permute(1, 0, 2) # (seq_len, batch_size, feature_dim)
+        x = x.permute(1, 0, 2) # (seq_len, batch_size, input_size)
         encoder_out = self.transformer_encoder.forward(x)
         
         if self.more_residuals:

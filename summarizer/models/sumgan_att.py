@@ -207,7 +207,7 @@ class SumGANAttModel(Model):
             for key in train_keys:
                 dataset = self.dataset[key]
                 x = dataset["features"][...]
-                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
+                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, input_size)
 
                 if self.hps.use_cuda:
                     x = x.cuda()
@@ -279,7 +279,7 @@ class SumGANAttModel(Model):
             for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
                 x = dataset["features"][...]
-                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
+                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, input_size)
                 y = dataset["gtscore"][...]
                 y = torch.from_numpy(y).view(-1, 1, 1) # (seq_len, 1, 1)
 

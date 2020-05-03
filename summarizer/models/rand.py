@@ -17,6 +17,12 @@ class Random(nn.Module):
         super(Random, self).__init__()
 
     def forward(self, x):
+        """
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          probs: (seq_len, batch_size, 1)
+        """
         seq_len, batch_size, _ = x.shape
         scores = torch.rand((seq_len, batch_size, 1))
         scores = scores.to(x.device)

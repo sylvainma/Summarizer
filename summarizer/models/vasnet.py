@@ -15,12 +15,12 @@ https://arxiv.org/abs/1812.01969
 """
 
 class VASNet(nn.Module):
-    def __init__(self, feature_dim=1024, max_length=None, pos_embed="simple", ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
+    def __init__(self, input_size=1024, max_length=None, pos_embed="simple", ignore_self=False, attention_aperture=None, scale=None, epsilon=1e-6, weight_init="xavier"):
         super(VASNet, self).__init__()
 
         # feature dimension that is the the dimensionality of the key, query and value vectors
         # as well as the hidden dimension for the FF layers
-        self.feature_dim = feature_dim
+        self.input_size = input_size
 
         # Aperture to control the range of attention. If None, all frames are considered (global attn.)
         # If this is an integer w, frames [t-w, t+w] will be considered (local attention)
@@ -31,7 +31,7 @@ class VASNet(nn.Module):
 
         # scaling factor to have more stable gradients. VasNet recommends 0.06,
         # but self-attention defaults to 1/square root of the dimension of the key vectors.
-        self.scale = scale if scale is not None else 1 / np.sqrt(self.feature_dim)
+        self.scale = scale if scale is not None else 1 / np.sqrt(self.input_size)
 
         # Optional positional embeddings
         self.max_length = max_length
@@ -39,30 +39,30 @@ class VASNet(nn.Module):
             self.pos_embed_type = pos_embed
 
             if self.pos_embed_type == "simple":
-                self.pos_embed = torch.nn.Embedding(self.max_length, self.feature_dim)
+                self.pos_embed = torch.nn.Embedding(self.max_length, self.input_size)
             elif self.pos_embed_type == "attention":
-                self.pos_embed = torch.zeros(self.max_length, self.feature_dim)
+                self.pos_embed = torch.zeros(self.max_length, self.input_size)
                 for pos in np.arange(self.max_length):
-                    for i in np.arange(0, self.feature_dim, 2):
-                        self.pos_embed[pos, i] = np.sin(pos / (10000 ** ((2 * i)/self.feature_dim)))
-                        self.pos_embed[pos, i + 1] = np.cos(pos / (10000 ** ((2 * (i + 1))/self.feature_dim)))
+                    for i in np.arange(0, self.input_size, 2):
+                        self.pos_embed[pos, i] = np.sin(pos / (10000 ** ((2 * i)/self.input_size)))
+                        self.pos_embed[pos, i + 1] = np.cos(pos / (10000 ** ((2 * (i + 1))/self.input_size)))
             else:
                 self.max_length = None
 
         # Common steps
         self.dropout = nn.Dropout(0.5)
-        self.layer_norm = torch.nn.LayerNorm(self.feature_dim, epsilon)
+        self.layer_norm = torch.nn.LayerNorm(self.input_size, epsilon)
 
         # self-attention layers
-        self.K = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
-        self.Q = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
-        self.V = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
-        self.attention_head_projection = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim, bias=False)
+        self.K = nn.Linear(in_features=self.input_size, out_features=self.input_size, bias=False)
+        self.Q = nn.Linear(in_features=self.input_size, out_features=self.input_size, bias=False)
+        self.V = nn.Linear(in_features=self.input_size, out_features=self.input_size, bias=False)
+        self.attention_head_projection = nn.Linear(in_features=self.input_size, out_features=self.input_size, bias=False)
         self.softmax = nn.Softmax(dim=2)
 
         # FFNN layers
-        self.k1 = nn.Linear(in_features=self.feature_dim, out_features=self.feature_dim)
-        self.k2 = nn.Linear(in_features=self.feature_dim, out_features=1)
+        self.k1 = nn.Linear(in_features=self.input_size, out_features=self.input_size)
+        self.k2 = nn.Linear(in_features=self.input_size, out_features=1)
         self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
 
@@ -90,12 +90,18 @@ class VASNet(nn.Module):
 
 
     def forward(self, x):
-        seq_len, batch_size, feature_dim = x.shape
-        x = x.permute(1, 0, 2) # (batch_size, seq_len, feature_dim)
+        """
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          y: (seq_len, batch_size, 1)
+        """
+        seq_len, batch_size, input_size = x.shape
+        x = x.permute(1, 0, 2) # (batch_size, seq_len, input_size)
 
         negative_inf = float('-inf')
 
-        assert self.feature_dim == feature_dim
+        assert self.input_size == input_size
 
         if self.max_length is not None:
             assert self.max_length >= seq_len, "input sequence has higher length than max_length"
@@ -103,7 +109,7 @@ class VASNet(nn.Module):
                 pos_tensor = torch.arange(seq_len).repeat(1, batch_size).view([batch_size, seq_len]).to(x.device)
                 x += self.pos_embed(pos_tensor)
             elif self.pos_embed_type == "attention":
-                x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, feature_dim).to(x.device)
+                x += self.pos_embed[:seq_len, :].repeat(1, batch_size).view(batch_size, seq_len, input_size).to(x.device)
 
         K = self.K(x)
         Q = self.Q(x)

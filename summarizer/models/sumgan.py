@@ -501,32 +501,32 @@ class SumGANTrainer(Trainer):
             train_avg_D_x = np.mean(train_avg_D_x)
             train_avg_D_x_hat = np.mean(train_avg_D_x_hat)
             train_avg_D_x_hat_p = np.mean(train_avg_D_x_hat_p)
-            self.log.info(f"Epoch: {epoch+1:3}/{self.hps.epochs:3}   "
+            self.log.info(f"Epoch: {f'{epoch+1}/{self.hps.epochs}':6}   "
                             f"Lse: {train_avg_loss_s_e:.05f}  "
                             f"Ld: {train_avg_loss_d:.05f}  "
                             f"Lc: {train_avg_loss_c:.05f}  "
                             f"D(x): {train_avg_D_x:.05f}  "
                             f"D(x_hat): {train_avg_D_x_hat:.05f}  "
                             f"D(x_hat_p): {train_avg_D_x_hat_p:.05f}")
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Lse', train_avg_loss_s_e, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Ld', train_avg_loss_d, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Lc', train_avg_loss_c, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x', train_avg_D_x, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat', train_avg_D_x_hat, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat_p', train_avg_D_x_hat_p, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Lse", train_avg_loss_s_e, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Ld", train_avg_loss_d, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Lc", train_avg_loss_c, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x", train_avg_D_x, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat", train_avg_D_x_hat, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat_p", train_avg_D_x_hat_p, epoch)
 
             # Log the distribution of scores predicted by the selector
-            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_gtscore', np.array(dist_gtscore), epoch)
-            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_scores', np.array(dist_scores), epoch)
-            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_scores_uniform', np.array(dist_scores_uniform), epoch)
+            self.hps.writer.add_histogram(f"{self.dataset_name}/Fold_{fold+1}/Train/dist_gtscore", np.array(dist_gtscore), epoch)
+            self.hps.writer.add_histogram(f"{self.dataset_name}/Fold_{fold+1}/Train/dist_scores", np.array(dist_scores), epoch)
+            self.hps.writer.add_histogram(f"{self.dataset_name}/Fold_{fold+1}/Train/dist_scores_uniform", np.array(dist_scores_uniform), epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
                 avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/Correlation', avg_corr, epoch)
-                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg', avg_f_score, epoch)
-                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/F-score_max', max_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/Correlation", avg_corr, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg", avg_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_max", max_f_score, epoch)
                 best_avg_f_score = max(best_avg_f_score, avg_f_score)
                 best_max_f_score = max(best_max_f_score, max_f_score)
                 if avg_corr > best_corr:

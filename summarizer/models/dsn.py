@@ -155,18 +155,19 @@ class DSNTrainer(Trainer):
             # Log average reward and loss by the end of the epoch
             epoch_avg_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
             epoch_avg_loss = np.mean(epoch_avg_loss)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_avg_reward, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), epoch_avg_loss, epoch)
-            self.log.info("Epoch: {:6}   Reward: {:.05f}   Loss: {:.05f}".format(
-                str(epoch+1)+"/"+str(self.hps.epochs), epoch_avg_reward, epoch_avg_loss))
+            self.log.info(f"Epoch: {f'{epoch+1}/{self.hps.epochs}':6}   "
+                            f"Reward: {epoch_avg_reward:.05f}  "
+                            f"Loss: {epoch_avg_loss:.05f}")
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Reward", epoch_avg_reward, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Loss", epoch_avg_loss, epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
                 avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/Correlation", avg_corr, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg", avg_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_max", max_f_score, epoch)
                 best_avg_f_score = max(best_avg_f_score, avg_f_score)
                 best_max_f_score = max(best_max_f_score, max_f_score)
                 if avg_corr > best_corr:

@@ -28,9 +28,9 @@ class RandomModel(Model):
         return model
 
     def draw_scores(self, keys):
+        """Draw datasets scores distribution in Tensorboard histograms"""
         for i, key in enumerate(keys):
             d = self.dataset[key]
-            video_name = d["video_name"][...]
             gtscore = d["gtscore"][...]
             self.hps.writer.add_histogram(f"{self.dataset_name}/dist_gtscore", gtscore, i)
 

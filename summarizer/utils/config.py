@@ -28,7 +28,7 @@ class HParameters:
         self.l2_req = 0.00001
         self.lr = 0.00005
 
-        self.epochs = 100
+        self.epochs = 10
         self.test_every_epochs = 2
 
         # Project root directory
@@ -37,13 +37,8 @@ class HParameters:
             "datasets/summarizer_dataset_tvsum_google_pool5.h5",
             "datasets/summarizer_dataset_LOL_google_pool5.h5"]
 
-        # Split files to be trained/tested on
-        self.splits_files = [
-            "splits/tvsum_splits.json",
-            "splits/tvsum_splits_overfit.json",
-            "splits/summe_splits.json",
-            "splits/summe_splits_overfit.json",
-            "splits/LOL_splits.json"]
+        # Default split files to be trained/tested on
+        self.splits_files = ["splits/tvsum_splits_overfit.json"]
 
         # Default model
         self.model_class = LogisticRegressionTrainer

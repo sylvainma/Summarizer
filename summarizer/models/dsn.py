@@ -61,6 +61,7 @@ class DSNTrainer(Trainer):
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
+        self.draw_gtscores(fold, train_keys)
 
         # Model parameters
         self.log.debug("Parameters: {}".format(sum([_.numel() for _ in self.model.parameters()])))
@@ -88,6 +89,7 @@ class DSNTrainer(Trainer):
         # For each epoch
         for epoch in range(self.hps.epochs):
             epoch_avg_loss = []
+            dist_scores = {}
             random.shuffle(train_keys)
 
             # For each training video
@@ -149,8 +151,9 @@ class DSNTrainer(Trainer):
                 # Record average reward of the current video of the current epoch
                 reward_writers[key].append(np.mean(epis_rewards))
 
-                # Record loss
-                epoch_avg_loss.append(float(loss)) 
+                # Record loss and scores
+                epoch_avg_loss.append(float(loss))
+                dist_scores[key] = probs.detach().cpu().numpy()
 
             # Log average reward and loss by the end of the epoch
             epoch_avg_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
@@ -173,6 +176,9 @@ class DSNTrainer(Trainer):
                 if avg_corr > best_corr:
                     best_corr = avg_corr
                     self.best_weights = self.model.state_dict()
+
+        # Log final scores
+        self.draw_scores(fold, dist_scores)
 
         return best_corr, best_avg_f_score, best_max_f_score
     

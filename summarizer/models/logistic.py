@@ -43,6 +43,7 @@ class LogisticRegressionTrainer(Trainer):
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
+        self.draw_gtscores(fold, train_keys)
 
         criterion = nn.MSELoss()
         if self.hps.use_cuda:
@@ -59,6 +60,7 @@ class LogisticRegressionTrainer(Trainer):
         # For each epoch
         for epoch in range(self.hps.epochs):
             train_avg_loss = []
+            dist_scores = {}
             random.shuffle(train_keys)
 
             # For each training video
@@ -83,6 +85,7 @@ class LogisticRegressionTrainer(Trainer):
                 loss.backward()
                 self.optimizer.step()
                 train_avg_loss.append(float(loss))
+                dist_scores[key] = scores.detach().cpu().numpy()
 
             # Average training loss value of epoch
             train_avg_loss = np.mean(np.array(train_avg_loss))
@@ -103,6 +106,9 @@ class LogisticRegressionTrainer(Trainer):
                     best_corr = avg_corr
                     self.best_weights = self.model.state_dict()
 
+        # Log final scores
+        self.draw_scores(fold, dist_scores)
+        
         return best_corr, best_avg_f_score, best_max_f_score
 
 

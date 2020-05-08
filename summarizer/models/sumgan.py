@@ -357,6 +357,7 @@ class SumGANTrainer(Trainer):
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
+        self.draw_gtscores(fold, train_keys)
 
         # Pretrain VAE
         if self.pretrain_vae > 0:
@@ -393,9 +394,7 @@ class SumGANTrainer(Trainer):
             train_avg_D_x = []
             train_avg_D_x_hat = []
             train_avg_D_x_hat_p = []
-            dist_gtscore = []
-            dist_scores = []
-            dist_scores_uniform = []
+            dist_scores = {}
             random.shuffle(train_keys)
 
             # For each training video
@@ -489,10 +488,7 @@ class SumGANTrainer(Trainer):
                 train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
                 train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
                 train_avg_D_x_hat_p.append(torch.mean(probs_uniform).detach().cpu().numpy())
-                if batch_i == 0:
-                    dist_gtscore.append(y.detach().cpu().numpy())
-                    dist_scores.append(scores.detach().cpu().numpy())
-                    dist_scores_uniform.append(scores_uniform.detach().cpu().numpy())
+                dist_scores[key] = scores.detach().cpu().numpy()
 
             # Log losses and probs for real and fake data by the end of the epoch
             train_avg_loss_s_e = np.mean(train_avg_loss_s_e)
@@ -515,11 +511,6 @@ class SumGANTrainer(Trainer):
             self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat", train_avg_D_x_hat, epoch)
             self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat_p", train_avg_D_x_hat_p, epoch)
 
-            # Log the distribution of scores predicted by the selector
-            self.hps.writer.add_histogram(f"{self.dataset_name}/Fold_{fold+1}/Train/dist_gtscore", np.array(dist_gtscore), epoch)
-            self.hps.writer.add_histogram(f"{self.dataset_name}/Fold_{fold+1}/Train/dist_scores", np.array(dist_scores), epoch)
-            self.hps.writer.add_histogram(f"{self.dataset_name}/Fold_{fold+1}/Train/dist_scores_uniform", np.array(dist_scores_uniform), epoch)
-
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
                 avg_corr, (avg_f_score, max_f_score) = self.test(fold)
@@ -535,6 +526,9 @@ class SumGANTrainer(Trainer):
 
             # Free unused memory from GPU
             torch.cuda.empty_cache()
+
+        # Log final scores
+        self.draw_scores(fold, dist_scores)
 
         return best_corr, best_avg_f_score, best_max_f_score
 

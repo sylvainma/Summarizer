@@ -118,6 +118,27 @@ class Trainer:
         max_f_score = np.mean(max_f_scores)
         return avg_f_score, max_f_score
 
+    def draw_gtscores(self, fold, keys, norm=True):
+        """Draw datasets ground truth scores distribution in Tensorboard histograms"""
+        for key in keys:
+            d = self.dataset[key]
+            i = int(key.split("_")[1])
+            gtscore = d["gtscore"][...]
+            if norm:
+                gtscore -= gtscore.min()
+                gtscore /= gtscore.max() - gtscore.min()
+            self.hps.writer.add_histogram(
+                f"{self.dataset_name}/Fold_{fold+1}/Train/gtscores", 
+                gtscore, i)
+
+    def draw_scores(self, fold, dist_scores):
+        """Draw predicted scores distribution in Tensorboard histograms"""
+        for key, scores in dist_scores.items():
+            i = int(key.split("_")[1])
+            self.hps.writer.add_histogram(
+                f"{self.dataset_name}/Fold_{fold+1}/Train/final_scores",
+                scores, i)
+
     def predict_dataset(self, pred_path):
         """Predict on all videos in the dataset and save in hdfs5 file"""
         # Load best weights

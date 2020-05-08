@@ -4,7 +4,7 @@ import math
 import numpy as np
 from scipy import stats
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from summarizer.knapsack import knapsack_ortools
+from summarizer.utils.knapsack import knapsack_ortools
 
 """
 From original implementations of Kaiyang Zhou and Jiri Fajtl

@@ -4,25 +4,29 @@ import h5py
 import cv2
 from tqdm import tqdm
 
+"""
+Generate a video summary from the predictions and the frames.
+"""
+
 def frm2video(frm_dir, summary, vid_writer):
     for idx, val in tqdm(enumerate(summary), total=len(summary), ncols=80):
         if val == 1:
-            # here frame name starts with '000001.jpg'
-            frm_name = str(idx+1).zfill(6) + '.jpg'
+            # here frame name starts with "000001.jpg"
+            frm_name = str(idx+1).zfill(6) + ".jpg"
             frm_path = osp.join(frm_dir, frm_name)
             frm = cv2.imread(frm_path)
             frm = cv2.resize(frm, (args.width, args.height))
             vid_writer.write(frm)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--path', type=str, required=True, help="Path to hdfs5 predictions file")
-    parser.add_argument('-f', '--frames', type=str, required=True, help="Path to frame directory")
-    parser.add_argument('-d', '--dataset', type=str, help="Dataset hdfs5 filename")
-    parser.add_argument('-v', '--video', type=str, help="Which video key to choose")
-    parser.add_argument('--fps', type=int, default=30, help="frames per second")
-    parser.add_argument('--width', type=int, default=640, help="frame width")
-    parser.add_argument('--height', type=int, default=480, help="frame height")
+    parser.add_argument("-p", "--path", type=str, required=True, help="Path to hdfs5 predictions file")
+    parser.add_argument("-f", "--frames", type=str, required=True, help="Path to frame directory")
+    parser.add_argument("-d", "--dataset", type=str, help="Dataset hdfs5 filename")
+    parser.add_argument("-v", "--video", type=str, help="Which video key to choose")
+    parser.add_argument("--fps", type=int, default=30, help="frames per second")
+    parser.add_argument("--width", type=int, default=640, help="frame width")
+    parser.add_argument("--height", type=int, default=480, help="frame height")
     args = parser.parse_args()
 
     summary_file = f"summary_{args.video}.mp4"
@@ -39,4 +43,4 @@ if __name__ == '__main__':
     h5_preds.close()
     frm2video(args.frames, summary, vid_writer)
     vid_writer.release()
-    print(f"Summary saved {summary_path}")
+    print(f"Summary saved at {summary_path}")

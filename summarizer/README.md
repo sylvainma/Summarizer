@@ -12,7 +12,7 @@ Go to `/models` and create a new file of the name of the model. Create Pytorch m
 ## Generate video summaries
 When training, by the end of the classification, scores are computed on every video of the dataset using the best found weights. The generated summaries are saved in `logs/<timestamp>_<model_name>/<dataset_name>_preds.h5`. Video summaries can be generated using `summary2video.py`:
 ```
-python summary2video.py -p logs/1586668539_LogisticRegressionTrainer/summe_splits.json_preds.h5 -f datasets/videos/summe/frames/Air_Force_One -d summarizer_dataset_summe_google_pool5.h5 -v video_1
+python summary.py -p logs/1586668539_LogisticRegressionTrainer/summe_splits.json_preds.h5 -f datasets/videos/summe/frames/Air_Force_One -d summarizer_dataset_summe_google_pool5.h5 -v video_1
 ```
 
 ## Generate splits

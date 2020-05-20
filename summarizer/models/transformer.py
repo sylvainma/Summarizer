@@ -133,7 +133,7 @@ class TransformerTrainer(Trainer):
             criterion = criterion.cuda()
 
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())
-        self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr, weight_decay=self.hps.l2_req)
+        self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr, weight_decay=self.hps.weight_decay)
 
         # To record performances of the best epoch
         best_corr, best_avg_f_score, best_max_f_score = -1.0, 0.0, 0.0

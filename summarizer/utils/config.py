@@ -25,7 +25,7 @@ class HParameters:
         self.use_cuda = False
         self.cuda_device = 0
 
-        self.l2_req = 0.00001
+        self.weight_decay = 0.00001
         self.lr = 0.00005
 
         self.epochs = 10
@@ -92,6 +92,10 @@ class HParameters:
         else:
             self.use_cuda = False
 
+        # Specify CUDA device (possibly different from GPU 0)
+        if self.use_cuda:
+            torch.cuda.set_device(self.cuda_device)
+
         # List of splits by filename
         self.dataset_name_of_file = {}
         self.dataset_of_file = {}
@@ -139,7 +143,7 @@ class HParameters:
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
         vars = ["use_cuda", "cuda_device", "log_level",
-                "l2_req", "lr", "epochs",
+                "weight_decay", "lr", "epochs",
                 "log_path", "splits_files", "extra_params"]
         info_str = ""
         for i, var in enumerate(vars):
@@ -153,7 +157,7 @@ class HParameters:
 
     def get_full_hps_dict(self):
         """Returns the list of hyperparameters as a flat dict"""
-        vars = ["l2_req", "lr", "epochs"]
+        vars = ["weight_decay", "lr", "epochs"]
 
         hps = {}
         for i, var in enumerate(vars):

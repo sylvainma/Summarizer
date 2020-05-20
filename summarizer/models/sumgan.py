@@ -323,7 +323,7 @@ class SumGANTrainer(Trainer):
         vae_optimizer = torch.optim.Adam(
             self.model.summarizer.vae.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         for epoch in range(self.pretrain_vae):
             train_avg_loss_vae = []
@@ -368,15 +368,15 @@ class SumGANTrainer(Trainer):
             list(self.model.summarizer.s_lstm.parameters())
             + list(self.model.summarizer.vae.e_lstm.parameters()),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         self.d_optimizer = torch.optim.Adam(
             self.model.summarizer.vae.d_lstm.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         self.c_optimizer = torch.optim.Adam(
             self.model.gan.c_lstm.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         # BCE loss for GAN optimization
         self.loss_BCE = nn.BCELoss()

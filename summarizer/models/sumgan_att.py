@@ -198,7 +198,7 @@ class SumGANAttTrainer(Trainer):
         ae_optimizer = torch.optim.Adam(
             self.model.summarizer.ae.parameters(),
             lr=self.hps.lr * 10.0,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         for epoch in range(self.pretrain_ae):
             train_avg_loss_ae = []
@@ -244,16 +244,16 @@ class SumGANAttTrainer(Trainer):
             + list(self.model.summarizer.ae.transformer_encoder.parameters())
             + list(self.model.summarizer.ae.transformer_encoder_layer.parameters()),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         self.d_optimizer = torch.optim.Adam(
             list(self.model.summarizer.ae.transformer_decoder.parameters())
             + list(self.model.summarizer.ae.transformer_decoder_layer.parameters()),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         self.c_optimizer = torch.optim.Adam(
             self.model.gan.c_lstm.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         # BCE loss for GAN optimization
         self.loss_BCE = nn.BCELoss()

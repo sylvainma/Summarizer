@@ -70,7 +70,7 @@ class DSNTrainer(Trainer):
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         
         # BCE loss for supervised extension
         loss_BCE = nn.BCELoss()

@@ -52,7 +52,7 @@ class LogisticRegressionTrainer(Trainer):
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         # To record performances of the best epoch
         best_corr, best_avg_f_score, best_max_f_score = -1.0, 0.0, 0.0

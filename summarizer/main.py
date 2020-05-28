@@ -4,6 +4,7 @@ import sys
 import numpy as np
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils.config import HParameters
+from summarizer.utils import Proportion
 
 
 def train(hps):
@@ -81,6 +82,8 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--lr", type=float, help="Learning rate for train mode")
     parser.add_argument("-d", "--weight-decay", type=float, help="Weight decay (L2 penalty-based regularization)")
     parser.add_argument("-t", "--test-every-epochs", type=int, help="Evaluate the model every nth epoch on the current fold's validation set")
+    parser.add_argument("-p", "--summary-proportion", type=float, choices=Proportion(), help="Length of video summary (as a proportion of original video length)")
+    parser.add_argument("-a", "--selection-algorithm", choices=["knapsack", "rank"], help="Keyshot selection algorithm to build the summary video")
     parser.add_argument("-l", "--log-level", choices=["critical", "error", "warning", "info", "debug"], default="info", help="Set logger to custom level")
     args, unknown_args = parser.parse_known_args()
 

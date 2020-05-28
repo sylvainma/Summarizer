@@ -109,7 +109,7 @@ class Trainer:
             positions = d["picks"][...]
             user_summary = d["user_summary"][...]
 
-            machine_summary = generate_summary(probs, cps, num_frames, nfps, positions)
+            machine_summary = generate_summary(probs, cps, num_frames, nfps, positions, self.hps.summary_proportion, self.hps.selection_algorithm)
             avg_f_score, max_f_score = evaluate_summary(machine_summary, user_summary)
             avg_f_scores.append(avg_f_score)
             max_f_scores.append(max_f_score)
@@ -166,7 +166,7 @@ class Trainer:
                 if self.hps.use_cuda:
                     seq = seq.cuda()
                 scores = self.model(seq).squeeze().detach().cpu().numpy()
-                machine_summary = generate_summary(scores, cps, n_frames, nfps, positions)
+                machine_summary = generate_summary(scores, cps, n_frames, nfps, positions, self.hps.summary_proportion, self.hps.selection_algorithm)
                 machine_scores = generate_scores(scores, n_frames, positions)
                 
                 # Save in hdfs5 file

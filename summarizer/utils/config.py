@@ -46,6 +46,12 @@ class HParameters:
         # Dict containing extra parameters, possibly model-specific
         self.extra_params = None
 
+        # Length of summary video as a proportion of the original
+        self.summary_proportion = 0.15
+        
+        # Keyshot selection algorithm to build the summary video (0-1 knapsack/rank)
+        self.selection_algorithm = "knapsack"
+
         # Logger default level is INFO
         self.log_level = logging.INFO
 
@@ -144,6 +150,7 @@ class HParameters:
         """Nicely lists hyperparameters when object is printed"""
         vars = ["use_cuda", "cuda_device", "log_level",
                 "weight_decay", "lr", "epochs",
+                "summary_proportion", "selection_algorithm",
                 "log_path", "splits_files", "extra_params"]
         info_str = ""
         for i, var in enumerate(vars):

@@ -76,7 +76,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Summarizer : Model Training")
     parser.add_argument("-c", "--use-cuda", choices=["yes", "no", "default"], default="default", help="Use cuda for pytorch models")
     parser.add_argument("-i", "--cuda-device", type=int, help="If cuda-enabled, ID of GPU to use")
-    parser.add_argument("-s", "--splits-files", type=str, help="Comma separated list of split files")
+    parser.add_argument("-s", "--splits-files", type=str, help="Comma separated list of split files (shorthands: minimal, overfit, all)")
     parser.add_argument("-m", "--model", type=str, help="Model class name")
     parser.add_argument("-e", "--epochs", type=int, help="Number of epochs for train mode")
     parser.add_argument("-r", "--lr", type=float, help="Learning rate for train mode")

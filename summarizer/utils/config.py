@@ -38,7 +38,7 @@ class HParameters:
             "datasets/summarizer_dataset_LOL_google_pool5.h5"]
 
         # Default split files to be trained/tested on
-        self.splits_files = ["splits/tvsum_splits_overfit.json"]
+        self.splits_files = "minimal"
 
         # Default model
         self.model_class = LogisticRegressionTrainer
@@ -101,6 +101,30 @@ class HParameters:
         # Specify CUDA device (possibly different from GPU 0)
         if self.use_cuda:
             torch.cuda.set_device(self.cuda_device)
+
+        # Handle splits options/shorthands
+        if self.splits_files == "minimal":
+            # minimal working example
+            self.splits_files = ["splits/tvsum_splits_overfit.json"]
+        elif self.splits_files == "overfit":
+            # POC using overfitting splits (1 fold with train=test) for TVSum and SumMe datasets
+            self.splits_files = [
+                "splits/tvsum_splits_overfit.json",
+                "splits/summe_splits_overfit.json"]
+        elif self.splits_files == "tvsum":
+            self.splits_files = ["splits/tvsum_splits.json"]
+        elif self.splits_files == "summe":
+            self.splits_files = ["splits/summe_splits.json"]
+        elif self.splits_files == "LOL":
+            self.splits_files = ["splits/LOL_splits.json"]
+        elif self.splits_files == "all":
+            self.splits_files = [
+                "splits/tvsum_splits.json",
+                "splits/tvsum_splits_overfit.json",
+                "splits/summe_splits.json",
+                "splits/summe_splits_overfit.json",
+                "splits/LOL_splits.json"]
+        # ... or a custom split file, or list of split files
 
         # List of splits by filename
         self.dataset_name_of_file = {}

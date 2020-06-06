@@ -19,3 +19,13 @@ python summary2video.py -p logs/1586668539_LogisticRegressionModel/summe_splits.
 ```
 python create_split.py -d datasets/summarizer_dataset_summe_google_pool5.h5 --save-dir splits --save-name summe_splits --num-splits 5
 ```
+
+## Build new HDF5 files
+While we provide (in `/datasets`) existing and new HDF5 files corresponding to a few of the classic datasets in video summarization (SumMe, TVSum, Twitch-LOL), you may create your own files using `generate_dataset.py`. This allows the generation of a custom HDF5 dataset following the same template as the existing datasets (including extracted features, keyshots, labels, etc.).
+
+This script was derived from [Shin Donghwan](https://github.com/SinDongHwan/pytorch-vsumm-reinforce/blob/master/utils/generate_dataset.py)'s own generation script, and using [Tatsuya Shirakawa](https://github.com/TatsuyaShirakawa/KTS)'s Cython rewrite of KTS for Python 3.
+
+For example, to rebuild [Twitch-LOL](https://github.com/chengyangfu/Pytorch-Twitch-LOL#dataset-download---google-drive) with a 2-second uniform segmentation, you may use:
+```
+python generate_dataset.py --video datasets/videos/EMNLP17_Twitch_LOL/final_data --annotations datasets/videos/EMNLP17_Twitch_LOL/gt --h5 datasets/summarizer_dataset_LOL_google_pool5.h5 --changepoint-method uniform --changepoint-duration 4 --keyshot-sampling 15 --extractor googlenet --layer-limit=-2
+```

@@ -134,5 +134,8 @@ dmypy.json
 .metals/
 .vscode/
 
+# Compiled Cython .pyx to .c (platform-dependent)
+summarizer/utils/KTS/cpd_nonlin.c
+
 # Finally untrack datasets (no money for git lfs bro)
 *.h5

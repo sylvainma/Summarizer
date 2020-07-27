@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Bernoulli
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Deep Reinforcement Learning for Unsupervised Video Summarization with Diversity-Representativeness Reward
@@ -16,24 +16,38 @@ https://github.com/KaiyangZhou/pytorch-vsumm-reinforce
 
 class DSN(nn.Module):
     """Deep Summarization Network"""
-    def __init__(self, in_dim=1024, hid_dim=256, num_layers=1, cell='lstm'):
+    def __init__(self, input_size=1024, hidden_size=256, num_layers=1, cell="lstm"):
         super(DSN, self).__init__()
-        assert cell in ['lstm', 'gru'], "cell must be either 'lstm' or 'gru'"
-        if cell == 'lstm':
-            self.rnn = nn.LSTM(in_dim, hid_dim, num_layers=num_layers, bidirectional=True, batch_first=True)
+        assert cell in ["lstm", "gru"], "cell must be either 'lstm' or 'gru'"
+        if cell == "lstm":
+            self.rnn = nn.LSTM(
+                input_size,
+                hidden_size,
+                num_layers=num_layers,
+                bidirectional=True)
         else:
-            self.rnn = nn.GRU(in_dim, hid_dim, num_layers=num_layers, bidirectional=True, batch_first=True)
+            self.rnn = nn.GRU(
+                input_size,
+                hidden_size,
+                num_layers=num_layers,
+                bidirectional=True)
         self.out = nn.Sequential(
-            nn.Linear(hid_dim * 2, 1),
+            nn.Linear(hidden_size*2, 1),
             nn.Sigmoid())
 
     def forward(self, x):
+        """Pass the input video through the LSTM.
+        Input
+          x: (seq_len, batch_size, input_size)
+        Output
+          probs: (seq_len, batch_size, 1)
+        """
         h, _ = self.rnn(x)
         probs = self.out(h)
         return probs
 
 
-class DSNModel(Model):
+class DSNTrainer(Trainer):
     def _init_model(self):
         self.beta = int(self.hps.extra_params.get("beta", 0.01))
         self.num_episodes = int(self.hps.extra_params.get("num_episodes", 5))
@@ -47,6 +61,7 @@ class DSNModel(Model):
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
+        self.draw_gtscores(fold, train_keys)
 
         # Model parameters
         self.log.debug("Parameters: {}".format(sum([_.numel() for _ in self.model.parameters()])))
@@ -55,7 +70,7 @@ class DSNModel(Model):
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         
         # BCE loss for supervised extension
         loss_BCE = nn.BCELoss()
@@ -63,7 +78,7 @@ class DSNModel(Model):
             loss_BCE.cuda()
 
         # Baseline rewards for videos
-        baselines = {key: 0. for key in train_keys} 
+        baselines = {key: 0. for key in train_keys}
 
         # Record reward changes for each video across epochs
         reward_writers = {key: [] for key in train_keys}
@@ -74,22 +89,23 @@ class DSNModel(Model):
         # For each epoch
         for epoch in range(self.hps.epochs):
             epoch_avg_loss = []
+            dist_scores = {}
             random.shuffle(train_keys)
 
             # For each training video
             for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
-                seq = dataset['features'][...]
-                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, dim)
-                y = dataset["gtscore"][...]
-                y = torch.from_numpy(y).view(-1, 1, 1) # (seq_len, 1, 1)
+                seq = dataset["features"][...]
+                seq = torch.from_numpy(seq).unsqueeze(1) # (seq_len, 1, input_size)
+                target = dataset["gtscore"][...]
+                target = torch.from_numpy(target).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
-                y -= y.min()
-                y /= y.max()
+                target -= target.min()
+                target /= target.max() - target.min()
 
                 if self.hps.use_cuda: 
-                    seq, y = seq.cuda(), y.cuda()
+                    seq, target = seq.cuda(), target.cuda()
                 
                 # Score probabilities from the RNN
                 probs = self.model(seq)
@@ -100,7 +116,7 @@ class DSNModel(Model):
 
                 # Extension to supervised learning (neg-MLE <=> BCE)
                 if self.sup:
-                    loss += loss_BCE(probs, y)
+                    loss += loss_BCE(probs, target)
                 
                 # Run episodes
                 epis_rewards = []
@@ -135,36 +151,41 @@ class DSNModel(Model):
                 # Record average reward of the current video of the current epoch
                 reward_writers[key].append(np.mean(epis_rewards))
 
-                # Record loss
-                epoch_avg_loss.append(float(loss)) 
+                # Record loss and scores
+                epoch_avg_loss.append(float(loss))
+                dist_scores[key] = probs.detach().cpu().numpy()
 
             # Log average reward and loss by the end of the epoch
             epoch_avg_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
             epoch_avg_loss = np.mean(epoch_avg_loss)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Reward'.format(self.dataset_name, fold+1), epoch_avg_reward, epoch)
-            self.hps.writer.add_scalar('{}/Fold_{}/Train/Loss'.format(self.dataset_name, fold+1), epoch_avg_loss, epoch)
-            self.log.info("Epoch: {:6}   Reward: {:.05f}   Loss: {:.05f}".format(
-                str(epoch+1)+"/"+str(self.hps.epochs), epoch_avg_reward, epoch_avg_loss))
+            self.log.info(f"Epoch: {f'{epoch+1}/{self.hps.epochs}':6}   "
+                            f"Reward: {epoch_avg_reward:.05f}  "
+                            f"Loss: {epoch_avg_loss:.05f}")
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Reward", epoch_avg_reward, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Loss", epoch_avg_loss, epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
                 avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/Correlation'.format(self.dataset_name, fold+1), avg_corr, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_avg'.format(self.dataset_name, fold+1), avg_f_score, epoch)
-                self.hps.writer.add_scalar('{}/Fold_{}/Test/F-score_max'.format(self.dataset_name, fold+1), max_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/Correlation", avg_corr, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg", avg_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_max", max_f_score, epoch)
                 best_avg_f_score = max(best_avg_f_score, avg_f_score)
                 best_max_f_score = max(best_max_f_score, max_f_score)
                 if avg_corr > best_corr:
                     best_corr = avg_corr
                     self.best_weights = self.model.state_dict()
 
+        # Log final scores
+        self.draw_scores(fold, dist_scores)
+
         return best_corr, best_avg_f_score, best_max_f_score
     
     def compute_reward(self, seq, actions, far_sim=False, temp_dist_thre=20):
         """Compute diversity reward and representativeness reward
         Args:
-            seq: sequence of features, shape (seq_len, 1, dim)
+            seq: sequence of features, shape (seq_len, 1, input_size)
             actions: binary action sequence, shape (seq_len, 1, 1)
             far_sim (bool): whether to use temporally distant similarity (default: False)
             temp_dist_thre (int): threshold for ignoring temporally distant similarity (default: 20)
@@ -202,7 +223,7 @@ class DSNModel(Model):
             reward_div = dissim_submat.sum() / (num_picks * (num_picks - 1.))
 
         # Compute representativeness reward [Eq.5]
-        dist_mat = torch.pow(_seq, 2).sum(dim=1, keepdim=True).expand(T, T) # (T, T)
+        dist_mat = torch.pow(_seq, 2).sum(dim=1, keepdim=True).expand(T, T)
         dist_mat = dist_mat + dist_mat.t()
         dist_mat.addmm_(1, -2, _seq, _seq.t())
         dist_mat = dist_mat[:,pick_idxs]
@@ -216,4 +237,11 @@ class DSNModel(Model):
 
 
 if __name__ == "__main__":
-    pass
+    model = DSN()
+    print("Trainable parameters in model:", sum([_.numel() for _ in model.parameters() if _.requires_grad]))
+
+    x = torch.randn(10, 3, 1024)
+    y = model(x)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[1] == y.shape[1]
+    assert y.shape[2] == 1

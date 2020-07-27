@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from summarizer.models import Model
+from summarizer.models import Trainer
 
 """
 Unsupervised Video Summarization with Adversarial LSTM Networks
@@ -258,7 +258,7 @@ class SumGAN(nn.Module):
         return self.summarizer.s_lstm(x)
 
 
-class SumGANModel(Model):
+class SumGANTrainer(Trainer):
     def _init_model(self):
         # SumGAN hyperparameters
         self.sigma = float(self.hps.extra_params.get("sigma", 0.3))
@@ -323,7 +323,7 @@ class SumGANModel(Model):
         vae_optimizer = torch.optim.Adam(
             self.model.summarizer.vae.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         for epoch in range(self.pretrain_vae):
             train_avg_loss_vae = []
@@ -332,7 +332,7 @@ class SumGANModel(Model):
             for key in train_keys:
                 dataset = self.dataset[key]
                 x = dataset["features"][...]
-                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
+                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, input_size)
 
                 if self.hps.use_cuda:
                     x = x.cuda()
@@ -357,6 +357,7 @@ class SumGANModel(Model):
     def train(self, fold):
         self.model.train()
         train_keys, _ = self._get_train_test_keys(fold)
+        self.draw_gtscores(fold, train_keys)
 
         # Pretrain VAE
         if self.pretrain_vae > 0:
@@ -367,15 +368,15 @@ class SumGANModel(Model):
             list(self.model.summarizer.s_lstm.parameters())
             + list(self.model.summarizer.vae.e_lstm.parameters()),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         self.d_optimizer = torch.optim.Adam(
             self.model.summarizer.vae.d_lstm.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
         self.c_optimizer = torch.optim.Adam(
             self.model.gan.c_lstm.parameters(),
             lr=self.hps.lr,
-            weight_decay=self.hps.l2_req)
+            weight_decay=self.hps.weight_decay)
 
         # BCE loss for GAN optimization
         self.loss_BCE = nn.BCELoss()
@@ -393,22 +394,20 @@ class SumGANModel(Model):
             train_avg_D_x = []
             train_avg_D_x_hat = []
             train_avg_D_x_hat_p = []
-            dist_gtscore = []
-            dist_scores = []
-            dist_scores_uniform = []
+            dist_scores = {}
             random.shuffle(train_keys)
 
             # For each training video
             for batch_i, key in enumerate(train_keys):
                 dataset = self.dataset[key]
                 x = dataset["features"][...]
-                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, n_features)
+                x = torch.from_numpy(x).unsqueeze(1) # (seq_len, 1, input_size)
                 y = dataset["gtscore"][...]
                 y = torch.from_numpy(y).view(-1, 1, 1) # (seq_len, 1, 1)
 
                 # Normalize frame scores
                 y -= y.min()
-                y /= y.max()
+                y /= y.max() - y.min()
 
                 if self.hps.use_cuda:
                     x, y = x.cuda(), y.cuda()
@@ -489,10 +488,7 @@ class SumGANModel(Model):
                 train_avg_D_x.append(torch.mean(probs_real).detach().cpu().numpy())
                 train_avg_D_x_hat.append(torch.mean(probs_fake).detach().cpu().numpy())
                 train_avg_D_x_hat_p.append(torch.mean(probs_uniform).detach().cpu().numpy())
-                if batch_i == 0:
-                    dist_gtscore.append(y.detach().cpu().numpy())
-                    dist_scores.append(scores.detach().cpu().numpy())
-                    dist_scores_uniform.append(scores_uniform.detach().cpu().numpy())
+                dist_scores[key] = scores.detach().cpu().numpy()
 
             # Log losses and probs for real and fake data by the end of the epoch
             train_avg_loss_s_e = np.mean(train_avg_loss_s_e)
@@ -501,32 +497,27 @@ class SumGANModel(Model):
             train_avg_D_x = np.mean(train_avg_D_x)
             train_avg_D_x_hat = np.mean(train_avg_D_x_hat)
             train_avg_D_x_hat_p = np.mean(train_avg_D_x_hat_p)
-            self.log.info(f"Epoch: {epoch+1:3}/{self.hps.epochs:3}   "
+            self.log.info(f"Epoch: {f'{epoch+1}/{self.hps.epochs}':6}   "
                             f"Lse: {train_avg_loss_s_e:.05f}  "
                             f"Ld: {train_avg_loss_d:.05f}  "
                             f"Lc: {train_avg_loss_c:.05f}  "
                             f"D(x): {train_avg_D_x:.05f}  "
                             f"D(x_hat): {train_avg_D_x_hat:.05f}  "
                             f"D(x_hat_p): {train_avg_D_x_hat_p:.05f}")
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Lse', train_avg_loss_s_e, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Ld', train_avg_loss_d, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/Lc', train_avg_loss_c, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x', train_avg_D_x, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat', train_avg_D_x_hat, epoch)
-            self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat_p', train_avg_D_x_hat_p, epoch)
-
-            # Log the distribution of scores predicted by the selector
-            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_gtscore', np.array(dist_gtscore), epoch)
-            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_scores', np.array(dist_scores), epoch)
-            self.hps.writer.add_histogram(f'{self.dataset_name}/Fold_{fold+1}/Train/dist_scores_uniform', np.array(dist_scores_uniform), epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Lse", train_avg_loss_s_e, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Ld", train_avg_loss_d, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/Lc", train_avg_loss_c, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x", train_avg_D_x, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat", train_avg_D_x_hat, epoch)
+            self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Train/D_x_hat_p", train_avg_D_x_hat_p, epoch)
 
             # Evaluate performances on test keys
             if epoch % self.hps.test_every_epochs == 0:
                 avg_corr, (avg_f_score, max_f_score) = self.test(fold)
                 self.model.train()
-                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/Correlation', avg_corr, epoch)
-                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg', avg_f_score, epoch)
-                self.hps.writer.add_scalar(f'{self.dataset_name}/Fold_{fold+1}/Test/F-score_max', max_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/Correlation", avg_corr, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_avg", avg_f_score, epoch)
+                self.hps.writer.add_scalar(f"{self.dataset_name}/Fold_{fold+1}/Test/F-score_max", max_f_score, epoch)
                 best_avg_f_score = max(best_avg_f_score, avg_f_score)
                 best_max_f_score = max(best_max_f_score, max_f_score)
                 if avg_corr > best_corr:
@@ -536,12 +527,21 @@ class SumGANModel(Model):
             # Free unused memory from GPU
             torch.cuda.empty_cache()
 
+        # Log final scores
+        self.draw_scores(fold, dist_scores)
+
         return best_corr, best_avg_f_score, best_max_f_score
 
 
 if __name__ == "__main__":
     model = SumGAN()
-    print("Parameters:", sum([_.numel() for _ in model.parameters()]))
+    print("Trainable parameters in model:", sum([_.numel() for _ in model.parameters() if _.requires_grad]))
+
+    x = torch.randn(10, 3, 1024)
+    y = model(x)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[1] == y.shape[1]
+    assert y.shape[2] == 1
 
     model = Summarizer()
     x = torch.randn(10, 3, 1024)

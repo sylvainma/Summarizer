@@ -6,7 +6,7 @@ import pandas as pd
 import shutil
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from summarizer.utils.io import load_tvsum_mat
-from summarizer.vsum_tools import upsample
+from summarizer.utils.eval import upsample
 
 """
 Script for passing from eccv16_dataset_*.h5 to summarizer_dataset_*.h5.

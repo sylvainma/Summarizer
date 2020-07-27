@@ -15,3 +15,17 @@ def parse_splits_filename(splits_filename):
     # splits: [{"train_keys": [...], "test_keys": [...]}, ...]
     # with len(splits) := number of k_folds
     return dataset_name, splits
+
+class Proportion(object):
+    """ Restricted float class describing a proportion in ]0, 1]."""
+    def __eq__(self, value):
+        return 0 < value <= 1
+
+    def __contains__(self, item):
+        return self.__eq__(item)
+
+    def __iter__(self):
+        yield 'a proportion value in ]0, 1]'
+
+    def __str__(self):
+        return 'a proportion value in ]0, 1]'

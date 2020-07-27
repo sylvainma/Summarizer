@@ -9,13 +9,13 @@ from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from summarizer.utils import parse_splits_filename
-from summarizer.models.random import RandomModel
-from summarizer.models.logistic import LogisticRegressionModel
-from summarizer.models.vasnet import VASNetModel
-from summarizer.models.transformer import TransformerModel
-from summarizer.models.dsn import DSNModel
-from summarizer.models.sumgan import SumGANModel
-from summarizer.models.sumgan_att import SumGANAttModel
+from summarizer.models.rand import RandomTrainer
+from summarizer.models.logistic import LogisticRegressionTrainer
+from summarizer.models.vasnet import VASNetTrainer
+from summarizer.models.transformer import TransformerTrainer
+from summarizer.models.dsn import DSNTrainer
+from summarizer.models.sumgan import SumGANTrainer
+from summarizer.models.sumgan_att import SumGANAttTrainer
 
 
 class HParameters:
@@ -25,10 +25,10 @@ class HParameters:
         self.use_cuda = False
         self.cuda_device = 0
 
-        self.l2_req = 0.00001
+        self.weight_decay = 0.00001
         self.lr = 0.00005
 
-        self.epochs = 100
+        self.epochs = 10
         self.test_every_epochs = 2
 
         # Project root directory
@@ -37,19 +37,20 @@ class HParameters:
             "datasets/summarizer_dataset_tvsum_google_pool5.h5",
             "datasets/summarizer_dataset_LOL_google_pool5.h5"]
 
-        # Split files to be trained/tested on
-        self.splits_files = [
-            "splits/tvsum_splits.json",
-            "splits/tvsum_splits_overfit.json",
-            "splits/summe_splits.json",
-            "splits/summe_splits_overfit.json",
-            "splits/LOL_splits.json"]
+        # Default split files to be trained/tested on
+        self.splits_files = "minimal"
 
         # Default model
-        self.model_class = LogisticRegressionModel
+        self.model_class = LogisticRegressionTrainer
 
         # Dict containing extra parameters, possibly model-specific
         self.extra_params = None
+
+        # Length of summary video as a proportion of the original
+        self.summary_proportion = 0.15
+        
+        # Keyshot selection algorithm to build the summary video (0-1 knapsack/rank)
+        self.selection_algorithm = "knapsack"
 
         # Logger default level is INFO
         self.log_level = logging.INFO
@@ -65,14 +66,14 @@ class HParameters:
 
         # Pick model
         self.model_class = {
-            "random": RandomModel,
-            "logistic": LogisticRegressionModel,
-            "vasnet": VASNetModel,
-            "transformer": TransformerModel,
-            "dsn": DSNModel,
-            "sumgan": SumGANModel,
-            "sumgan_att": SumGANAttModel,
-            None: RandomModel
+            "random": RandomTrainer,
+            "logistic": LogisticRegressionTrainer,
+            "vasnet": VASNetTrainer,
+            "transformer": TransformerTrainer,
+            "dsn": DSNTrainer,
+            "sumgan": SumGANTrainer,
+            "sumgan_att": SumGANAttTrainer,
+            None: RandomTrainer
         }.get(args["model"], None)
         if self.model_class is None:
             raise KeyError(f"{args['model']} model is not unknown")
@@ -96,6 +97,34 @@ class HParameters:
             self.use_cuda = True
         else:
             self.use_cuda = False
+
+        # Specify CUDA device (possibly different from GPU 0)
+        if self.use_cuda:
+            torch.cuda.set_device(self.cuda_device)
+
+        # Handle splits options/shorthands
+        if self.splits_files == "minimal":
+            # minimal working example
+            self.splits_files = ["splits/tvsum_splits_overfit.json"]
+        elif self.splits_files == "overfit":
+            # POC using overfitting splits (1 fold with train=test) for TVSum and SumMe datasets
+            self.splits_files = [
+                "splits/tvsum_splits_overfit.json",
+                "splits/summe_splits_overfit.json"]
+        elif self.splits_files == "tvsum":
+            self.splits_files = ["splits/tvsum_splits.json"]
+        elif self.splits_files == "summe":
+            self.splits_files = ["splits/summe_splits.json"]
+        elif self.splits_files == "LOL":
+            self.splits_files = ["splits/LOL_splits.json"]
+        elif self.splits_files == "all":
+            self.splits_files = [
+                "splits/tvsum_splits.json",
+                "splits/tvsum_splits_overfit.json",
+                "splits/summe_splits.json",
+                "splits/summe_splits_overfit.json",
+                "splits/LOL_splits.json"]
+        # ... or a custom split file, or list of split files
 
         # List of splits by filename
         self.dataset_name_of_file = {}
@@ -144,7 +173,8 @@ class HParameters:
     def __str__(self):
         """Nicely lists hyperparameters when object is printed"""
         vars = ["use_cuda", "cuda_device", "log_level",
-                "l2_req", "lr", "epochs",
+                "weight_decay", "lr", "epochs",
+                "summary_proportion", "selection_algorithm",
                 "log_path", "splits_files", "extra_params"]
         info_str = ""
         for i, var in enumerate(vars):
@@ -158,7 +188,7 @@ class HParameters:
 
     def get_full_hps_dict(self):
         """Returns the list of hyperparameters as a flat dict"""
-        vars = ["l2_req", "lr", "epochs"]
+        vars = ["weight_decay", "lr", "epochs"]
 
         hps = {}
         for i, var in enumerate(vars):

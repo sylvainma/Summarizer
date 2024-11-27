@@ -1,5 +1,5 @@
 astroid==2.3.3
-certifi==2019.11.28
+certifi==2022.12.7
 h5py==2.10.0
 hdf5storage==0.1.15
 isort==4.3.21
